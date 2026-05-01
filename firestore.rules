@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Règle pour la collection USERS
+    match /users/{userId} {
+      // Un utilisateur peut lire son propre profil
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Seul un "Pilote" peut voir la liste de TOUS les utilisateurs
+      allow list: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pilote';
+        
+      // Interdiction totale de modifier son propre rôle
+      allow update: if request.auth != null && request.auth.uid == userId 
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
+    }
+
+    // 2. Règle pour les NOTES ou ABSENCES
+    match /bulletins/{docId} {
+      // L'élève ne voit que son bulletin
+      allow read: if request.auth != null && resource.data.studentId == request.auth.uid;
+      // Le pilote voit tout et modifie tout
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pilote';
+    }
+  }
+}

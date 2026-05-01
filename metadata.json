@@ -1,0 +1,7 @@
+{
+  "name": "EduTech Pro - Lycée Technique",
+  "description": "Système complet de gestion pour lycées techniques : suivi des élèves, notes, compétences (Radar Chart), badges de comportement et administration dynamique.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
