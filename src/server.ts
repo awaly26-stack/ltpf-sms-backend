@@ -37,7 +37,7 @@ async function startServer() {
   };
 
   // =========================
-  // HEALTH CHECK (PUBLIC)
+  // HEALTH CHECK
   // =========================
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", service: "LTPF SMS Proxy" });
@@ -174,8 +174,10 @@ async function startServer() {
   });
 
   // =========================
-  // FRONTEND (PROD / DEV)
+  // FRONTEND (PROD / DEV) FIX SAFE
   // =========================
+  const distPath = path.join(process.cwd(), "dist");
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true, hmr: false },
@@ -184,10 +186,11 @@ async function startServer() {
 
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
 
-    app.get("*", (req, res) => {
+    // ✅ FIX RENDER SAFE (NO "*")
+    app.use((req, res, next) => {
+      if (req.method !== "GET") return next();
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
