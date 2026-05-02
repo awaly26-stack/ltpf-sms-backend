@@ -63,7 +63,7 @@ export const sendSMS = async (
     // Nettoyage minimal uniquement (sécurité)
     const cleanTo = to.replace(/\s+/g, "").trim();
 
-   const response = await fetch("https://erupt-cornflake-jot.ngrok-free.dev/api/orange/sms", {
+   const response = await fetch(`${import.meta.env.VITE_API_URL}/api/orange/sms`, {
   method: "POST",
   headers: {
     "Content-Type": "application/json",

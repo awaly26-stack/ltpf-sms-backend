@@ -10,18 +10,41 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
+  // =========================
+  // MIDDLEWARES GLOBAUX
+  // =========================
   app.use(cors());
   app.use(express.json());
 
   // =========================
-  // HEALTH CHECK
+  // API KEY SECURITY
+  // =========================
+  const API_KEY = process.env.INTERNAL_API_KEY;
+
+  const verifyApiKey = (req: any, res: any, next: any) => {
+    const clientKey = req.headers["x-api-key"];
+
+    if (!API_KEY) {
+      console.error("❌ INTERNAL_API_KEY missing in .env");
+      return res.status(500).json({ error: "Server misconfigured" });
+    }
+
+    if (clientKey !== API_KEY) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    next();
+  };
+
+  // =========================
+  // HEALTH CHECK (PUBLIC)
   // =========================
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", service: "EduTechPro SMS Proxy" });
+    res.json({ status: "ok", service: "LTPF SMS Proxy" });
   });
 
   // =========================
-  // TOKEN CACHE ORANGE
+  // ORANGE TOKEN CACHE
   // =========================
   let orangeTokenCache: { token: string; expiresAt: number } | null = null;
 
@@ -54,8 +77,7 @@ async function startServer() {
       });
 
       if (!response.ok) {
-        const text = await response.text();
-        console.error("❌ TOKEN ERROR:", text);
+        console.error("❌ TOKEN ERROR:", await response.text());
         return null;
       }
 
@@ -74,9 +96,9 @@ async function startServer() {
   }
 
   // =========================
-  // SMS ROUTE ORANGE
+  // SMS ROUTE (PROTÉGÉE)
   // =========================
-  app.post("/api/orange/sms", async (req, res) => {
+  app.post("/api/orange/sms", verifyApiKey, async (req, res) => {
     const { to, message } = req.body;
 
     if (!to || !message) {
@@ -132,28 +154,27 @@ async function startServer() {
       }
 
       if (response.ok) {
-        console.log("✅ SMS SENT:", result);
         return res.json({ success: true, result });
       }
 
-      console.error("❌ ORANGE ERROR:", result);
-      return res.status(response.status).json({ success: false, error: result });
+      return res.status(response.status).json({
+        success: false,
+        error: result,
+      });
 
     } catch (error: any) {
       clearTimeout(timeout);
 
       if (error.name === "AbortError") {
-        console.error("❌ ORANGE TIMEOUT (20s)");
         return res.status(504).json({ error: "Orange timeout (20s)" });
       }
 
-      console.error("❌ SERVER ERROR:", error);
       return res.status(500).json({ error: "Server error" });
     }
   });
 
   // =========================
-  // VITE FRONTEND
+  // FRONTEND (PROD / DEV)
   // =========================
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -166,9 +187,7 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
 
-    // ✅ FIX IMPORTANT (remplace app.get("*"))
-    app.use((req, res, next) => {
-      if (req.method !== "GET") return next();
+    app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
@@ -181,5 +200,4 @@ async function startServer() {
   });
 }
 
-// 🔥 LANCEMENT DU SERVEUR
 startServer();
