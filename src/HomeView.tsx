@@ -4,7 +4,7 @@ import { Landmark, Star, Award, UserCheck, Wrench, Flame, Loader2, Sparkles, Shi
 import { SchoolEvent, Student, EventType, SchoolClass } from './types';
 import  ClassLeaderboard  from './ClassLeaderboard';
 import  WeeklyChallenge  from './WeeklyChallenge';
-import  AIGeneratedQuote  from './AIGeneratedQuote';
+
 
 const EVENT_TYPE_LABELS: Record<EventType, { label: string, icon: any, color: string }> = {
   'PROVISEUR': { label: 'Proviseur', icon: Landmark, color: 'bg-indigo-600' },

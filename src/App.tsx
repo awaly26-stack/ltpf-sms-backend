@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 // Fix: Removed missing modular firebase imports, relying on compat objects from firebaseConfig
 import { jsPDF } from "jspdf";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+
 
 import { db, auth } from './firebaseConfig';
 import { Student, Teacher, SchoolClass, Subject, SchoolEvent, User, Role, InventoryItem,EventType, Comment } from './types';
@@ -21,7 +21,7 @@ import { HomeView } from './HomeView';
 import { CampusView } from './CampusView';
 import { AdminView } from './AdminView';
 
-const SUPER_ADMIN_CODE = import.meta.env.VITE_SUPER_ADMIN_CODE;
+
 
 
 const App: React.FC = () => {
@@ -216,10 +216,26 @@ const App: React.FC = () => {
     // Mise à jour de la modal locale pour un rendu immédiat si besoin
     setSelectedEventForComments({...selectedEventForComments, comments: updatedComments});
   };
-  
+  const verifySuperAdminCode = async (code: string): Promise<boolean> => {
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/super-admin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ code }),
+    });
+
+    const data = await res.json();
+    return data.success === true;
+  } catch (err) {
+    return false;
+  }
+};
   const handleLogin = async () => {
     const rawInput = loginCode.trim();
     if (!rawInput) return;
+  
     
     // Normalisation pour accepter majuscules et minuscules
     const normalizedInputUpper = rawInput.toUpperCase();
@@ -228,11 +244,14 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       // Comparaison Super Admin (insensible à la casse)
-      if (normalizedInputUpper === SUPER_ADMIN_CODE.toUpperCase()) {
-        const adminUser: User = { id: 'admin_ltpf', name: 'ADMIN LTP', role: 'ADMIN' };
-        setCurrentUser(adminUser); saveUserSession(adminUser);
-        return;
-      }
+     const isValid = await verifySuperAdminCode(rawInput);
+
+if (isValid) {
+  const adminUser: User = { id: 'admin_ltpf', name: 'ADMIN LTP', role: 'ADMIN' };
+  setCurrentUser(adminUser);
+  saveUserSession(adminUser);
+  return;
+}
       
       // Recherche Staff (Majuscule ou Minuscule)
       let staffSnap = await db.collection("users").where("matricule", "in", [normalizedInputUpper, normalizedInputLower]).get();
@@ -617,30 +636,35 @@ const App: React.FC = () => {
     } catch (e) { alert("Erreur lors du reset professeurs."); } finally { setLoading(false); }
   };
 
-  const handleGenerateAiSummary = async () => {
-    if (isAiLoading) return;
-    setIsAiLoading(true);
-    setAiSummary(null);
-    try {
-      // 1. Initialisation (C'est correct)
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+ const handleGenerateAiSummary = async () => {
+  if (isAiLoading) return;
 
-// 2. Sélection du modèle (C'est l'étape qui manquait)
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  setIsAiLoading(true);
+  setAiSummary(null);
 
-// 3. Appel à la génération (On utilise 'model' et non 'ai.models')
-const result = await model.generateContent(
-  `En tant qu'assistant du Lycée Technique de Fatick, analyse : Taux de présence: ${studentStats.presenceRate}%, Total: ${studentStats.totalStudents}. Génère un court message de motivation (max 20 mots).`
-);
+  try {
+    const token = await auth.currentUser?.getIdToken();
 
-// 4. Récupération du texte final
-setAiSummary(result.response.text());
-    } catch (error) {
-      setAiSummary("Bienvenue sur LTP Silicon Campus. Excellence et Rigueur.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/ai/summarize`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        prompt: `En tant qu'assistant du Lycée Technique de Fatick, analyse : Taux de présence: ${studentStats.presenceRate}%, Total: ${studentStats.totalStudents}. Génère un court message de motivation (max 20 mots).`
+      }),
+    });
+
+    const data = await response.json();
+
+    setAiSummary(data.text || "Erreur IA");
+  } catch (error) {
+    setAiSummary("Bienvenue sur LTP Silicon Campus. Excellence et Rigueur.");
+  } finally {
+    setIsAiLoading(false);
+  }
+};
 
   const studentStats = useMemo(() => {
     const total = students.length || 1;

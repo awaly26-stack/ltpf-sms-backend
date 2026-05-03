@@ -1,4 +1,4 @@
-
+import { auth } from "./firebaseConfig";
 /**
  * Génère un matricule unique pour le LTP Fatick
  * Format: LTPF-2026-[ID_ALEATOIRE]
@@ -60,34 +60,36 @@ export const sendSMS = async (
   message: string
 ): Promise<boolean> => {
   try {
-    // Nettoyage minimal uniquement (sécurité)
     const cleanTo = to.replace(/\s+/g, "").trim();
 
-   const response = await fetch(`${import.meta.env.VITE_API_URL}/api/orange/sms`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "x-api-key": import.meta.env.VITE_INTERNAL_API_KEY || ""
-  },
-  body: JSON.stringify({
-    to: cleanTo,
-    message,
-  }),
-});
+    // 🔐 Récupération du token Firebase
+    const user = auth.currentUser;
 
-    const data = await response.json();
+    if (!user) {
+      console.error("❌ User not authenticated");
+      return false;
+    }
 
-   if (!response.ok) {
-  console.error("❌ SMS FULL ERROR:", data);
-  alert(JSON.stringify(data)); // 👈 AJOUT IMPORTANT
-  return false;
-}
+    const token = await user.getIdToken();
 
-    console.log("✅ SMS SENT:", data);
-    return true;
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/orange/sms`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // 🔥 IMPORTANT
+        },
+        body: JSON.stringify({
+          to: cleanTo,
+          message,
+        }),
+      }
+    );
 
+    return response.ok;
   } catch (error) {
-    console.error("❌ NETWORK ERROR SMS:", error);
+    console.error("SMS error:", error);
     return false;
   }
 };

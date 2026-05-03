@@ -1,3 +1,4 @@
+import admin from "firebase-admin";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -11,37 +12,120 @@ async function startServer() {
   const PORT = process.env.PORT || 3000;
 
   // =========================
+  // 🔐 FIREBASE ADMIN INIT
+  // =========================
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    });
+  }
+
+  // =========================
   // MIDDLEWARES GLOBAUX
   // =========================
   app.use(cors());
   app.use(express.json());
 
   // =========================
-  // API KEY SECURITY
+  // 🔐 FIREBASE AUTH MIDDLEWARE
   // =========================
-  const API_KEY = process.env.INTERNAL_API_KEY;
+  const verifyFirebaseToken = async (req: any, res: any, next: any) => {
+    const authHeader = req.headers.authorization;
 
-  const verifyApiKey = (req: any, res: any, next: any) => {
-    const clientKey = req.headers["x-api-key"];
-
-    if (!API_KEY) {
-      console.error("❌ INTERNAL_API_KEY missing in .env");
-      return res.status(500).json({ error: "Server misconfigured" });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "No token provided" });
     }
 
-    if (clientKey !== API_KEY) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
+    const token = authHeader.split("Bearer ")[1];
 
-    next();
+    try {
+      const decoded = await admin.auth().verifyIdToken(token);
+      req.user = decoded; // 🔥 user accessible après
+      next();
+    } catch (error) {
+      console.error("❌ Invalid token:", error);
+      return res.status(401).json({ error: "Unauthorized" });
+    }
   };
 
   // =========================
   // HEALTH CHECK
   // =========================
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", service: "LTPF SMS Proxy" });
   });
+  
+     // =========================
+  // ROUTE SUPER_ADMIN_COD
+  // =========================
+  app.post("/api/auth/super-admin", (req, res) => {
+  const { code } = req.body;
+
+  const SUPER_ADMIN_CODE = process.env.SUPER_ADMIN_CODE;
+
+  if (!SUPER_ADMIN_CODE) {
+    return res.status(500).json({ error: "Server misconfigured" });
+  }
+
+  if (code === SUPER_ADMIN_CODE) {
+    return res.json({ success: true });
+  }
+
+  return res.status(403).json({ success: false });
+});
+
+   // =========================
+  // ROUTE GEMINI AI
+  // =========================
+  apiRouter.post("/ai/summarize", verifyFirebaseToken, async (req: any, res: any) => {
+  const { prompt } = req.body;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    return res.status(503).json({ error: "Gemini API Key missing on server" });
+  }
+
+  if (!prompt) {
+    return res.status(400).json({ error: "Prompt is required" });
+  }
+
+  try {
+    // 🔐 OPTIONNEL : contrôle rôle utilisateur
+    const userDoc = await admin.firestore()
+      .collection("users")
+      .doc(req.user.uid)
+      .get();
+
+    const role = userDoc.data()?.role;
+
+    // 👉 seuls élèves + staff autorisés (ajuste selon ton besoin)
+    if (!role) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const { GoogleGenAI } = await import("@google/genai");
+    const genAI = new GoogleGenAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    return res.json({ text });
+
+  } catch (error: any) {
+    console.error("❌ Gemini Error:", error);
+    return res.status(500).json({
+      error: "IA error",
+      details: error.message
+    });
+  }
+});
 
   // =========================
   // ORANGE TOKEN CACHE
@@ -96,13 +180,25 @@ async function startServer() {
   }
 
   // =========================
-  // SMS ROUTE (PROTÉGÉE)
+  // 🔐 SMS ROUTE SÉCURISÉE
   // =========================
-  app.post("/api/orange/sms", verifyApiKey, async (req, res) => {
+  app.post("/api/orange/sms", verifyFirebaseToken, async (req: any, res: any) => {
     const { to, message } = req.body;
 
     if (!to || !message) {
       return res.status(400).json({ error: "Missing data" });
+    }
+
+    // 🔥 (OPTIONNEL MAIS RECOMMANDÉ) vérifier rôle
+    const userDoc = await admin.firestore()
+      .collection("users")
+      .doc(req.user.uid)
+      .get();
+
+    const role = userDoc.data()?.role;
+
+    if (role !== "ADMIN" && role !== "SURVEILLANT") {
+      return res.status(403).json({ error: "Access denied" });
     }
 
     const token = await getOrangeToken();
@@ -174,7 +270,7 @@ async function startServer() {
   });
 
   // =========================
-  // FRONTEND (PROD / DEV) FIX SAFE
+  // FRONTEND (PROD / DEV)
   // =========================
   const distPath = path.join(process.cwd(), "dist");
 
@@ -188,7 +284,6 @@ async function startServer() {
   } else {
     app.use(express.static(distPath));
 
-    // ✅ FIX RENDER SAFE (NO "*")
     app.use((req, res, next) => {
       if (req.method !== "GET") return next();
       res.sendFile(path.join(distPath, "index.html"));

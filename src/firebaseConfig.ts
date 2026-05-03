@@ -18,6 +18,7 @@ const firebaseConfig = {
 // Fix: Utilisation du pattern compatibility pour la robustesse de l'initialisation
 const app = firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth(app);
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 // Optimisation de la connexion Firestore pour les environnements réseau restreints
 const db = firebase.firestore(app);
