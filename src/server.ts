@@ -7,276 +7,228 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import cors from "cors";
 
-async function startServer() {
-  const app = express();
-  const PORT = process.env.PORT || 3000;
+// =========================
+// INIT APP
+// =========================
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  // =========================
-  // 🔐 FIREBASE ADMIN INIT
-  // =========================
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-    });
+// =========================
+// ROUTER API CENTRAL
+// =========================
+const apiRouter = express.Router();
+app.use("/api", apiRouter);
+
+// =========================
+// FIREBASE ADMIN INIT
+// =========================
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  });
+}
+
+// =========================
+// MIDDLEWARES
+// =========================
+app.use(cors());
+app.use(express.json());
+
+// =========================
+// AUTH MIDDLEWARE
+// =========================
+const verifyFirebaseToken = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "No token provided" });
   }
 
-  // =========================
-  // MIDDLEWARES GLOBAUX
-  // =========================
-  app.use(cors());
-  app.use(express.json());
-
-  // =========================
-  // 🔐 FIREBASE AUTH MIDDLEWARE
-  // =========================
-  const verifyFirebaseToken = async (req: any, res: any, next: any) => {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "No token provided" });
-    }
-
+  try {
     const token = authHeader.split("Bearer ")[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+};
 
-    try {
-      const decoded = await admin.auth().verifyIdToken(token);
-      req.user = decoded; // 🔥 user accessible après
-      next();
-    } catch (error) {
-      console.error("❌ Invalid token:", error);
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-  };
+// =========================
+// HEALTH
+// =========================
+apiRouter.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
 
-  // =========================
-  // HEALTH CHECK
-  // =========================
-
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", service: "LTPF SMS Proxy" });
-  });
-  
-     // =========================
-  // ROUTE SUPER_ADMIN_COD
-  // =========================
-  app.post("/api/auth/super-admin", (req, res) => {
+// =========================
+// SUPER ADMIN
+// =========================
+apiRouter.post("/auth/super-admin", (req, res) => {
   const { code } = req.body;
 
-  const SUPER_ADMIN_CODE = process.env.SUPER_ADMIN_CODE;
-
-  if (!SUPER_ADMIN_CODE) {
+  if (!process.env.SUPER_ADMIN_CODE) {
     return res.status(500).json({ error: "Server misconfigured" });
   }
 
-  if (code === SUPER_ADMIN_CODE) {
+  if (code === process.env.SUPER_ADMIN_CODE) {
     return res.json({ success: true });
   }
 
   return res.status(403).json({ success: false });
 });
 
-   // =========================
-  // ROUTE GEMINI AI
-  // =========================
-  apiRouter.post("/ai/summarize", verifyFirebaseToken, async (req: any, res: any) => {
+// =========================
+// GEMINI AI
+// =========================
+apiRouter.post("/ai/summarize", verifyFirebaseToken, async (req: any, res: any) => {
   const { prompt } = req.body;
-
   const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
-    return res.status(503).json({ error: "Gemini API Key missing on server" });
-  }
-
-  if (!prompt) {
-    return res.status(400).json({ error: "Prompt is required" });
-  }
+  if (!apiKey) return res.status(503).json({ error: "Missing API key" });
+  if (!prompt) return res.status(400).json({ error: "Prompt required" });
+  if (prompt.length > 2000) return res.status(400).json({ error: "Prompt too long" });
 
   try {
-    // 🔐 OPTIONNEL : contrôle rôle utilisateur
     const userDoc = await admin.firestore()
       .collection("users")
       .doc(req.user.uid)
       .get();
 
     const role = userDoc.data()?.role;
-
-    // 👉 seuls élèves + staff autorisés (ajuste selon ton besoin)
-    if (!role) {
-      return res.status(403).json({ error: "Access denied" });
-    }
+    if (!role) return res.status(403).json({ error: "Access denied" });
 
     const { GoogleGenAI } = await import("@google/genai");
-    const genAI = new GoogleGenAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const genAI = new GoogleGenAI({ apiKey });
 
-    return res.json({ text });
+    const response = await genAI.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: prompt,
+    });
+
+    return res.json({ text: response.text });
 
   } catch (error: any) {
-    console.error("❌ Gemini Error:", error);
     return res.status(500).json({
-      error: "IA error",
-      details: error.message
+      error: "AI error",
+      details: error.message,
     });
   }
 });
 
-  // =========================
-  // ORANGE TOKEN CACHE
-  // =========================
-  let orangeTokenCache: { token: string; expiresAt: number } | null = null;
+// =========================
+// ORANGE TOKEN CACHE
+// =========================
+let orangeTokenCache: { token: string; expiresAt: number } | null = null;
 
-  async function getOrangeToken(): Promise<string | null> {
-    const now = Date.now();
+async function getOrangeToken(): Promise<string | null> {
+  const now = Date.now();
 
-    if (orangeTokenCache && orangeTokenCache.expiresAt > now) {
-      return orangeTokenCache.token;
-    }
-
-    const clientId = process.env.ORANGE_CLIENT_ID;
-    const clientSecret = process.env.ORANGE_CLIENT_SECRET;
-
-    if (!clientId || !clientSecret) {
-      console.error("❌ Orange credentials missing");
-      return null;
-    }
-
-    try {
-      const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-
-      const response = await fetch("https://api.orange.com/oauth/v3/token", {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${authHeader}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body: "grant_type=client_credentials",
-      });
-
-      if (!response.ok) {
-        console.error("❌ TOKEN ERROR:", await response.text());
-        return null;
-      }
-
-      const data = await response.json();
-
-      orangeTokenCache = {
-        token: data.access_token,
-        expiresAt: now + (data.expires_in - 60) * 1000,
-      };
-
-      return data.access_token;
-    } catch (err) {
-      console.error("❌ Token error:", err);
-      return null;
-    }
+  if (orangeTokenCache && orangeTokenCache.expiresAt > now) {
+    return orangeTokenCache.token;
   }
 
-  // =========================
-  // 🔐 SMS ROUTE SÉCURISÉE
-  // =========================
-  app.post("/api/orange/sms", verifyFirebaseToken, async (req: any, res: any) => {
-    const { to, message } = req.body;
+  const clientId = process.env.ORANGE_CLIENT_ID;
+  const clientSecret = process.env.ORANGE_CLIENT_SECRET;
 
-    if (!to || !message) {
-      return res.status(400).json({ error: "Missing data" });
-    }
+  if (!clientId || !clientSecret) return null;
 
-    // 🔥 (OPTIONNEL MAIS RECOMMANDÉ) vérifier rôle
-    const userDoc = await admin.firestore()
-      .collection("users")
-      .doc(req.user.uid)
-      .get();
+  try {
+    const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
-    const role = userDoc.data()?.role;
+    const response = await fetch("https://api.orange.com/oauth/v3/token", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${authHeader}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials",
+    });
 
-    if (role !== "ADMIN" && role !== "SURVEILLANT") {
-      return res.status(403).json({ error: "Access denied" });
-    }
+    const data = await response.json();
 
-    const token = await getOrangeToken();
-    if (!token) {
-      return res.status(503).json({ error: "Orange unavailable" });
-    }
+    orangeTokenCache = {
+      token: data.access_token,
+      expiresAt: now + (data.expires_in - 60) * 1000,
+    };
 
-    const cleanTo = to.replace(/[^0-9]/g, "").slice(-9);
-    const formattedTo = `tel:+221${cleanTo}`;
+    return data.access_token;
 
-    const senderAddress = "tel:+221777154775";
-    const senderName = "LTPFatick";
-    const encodedSender = encodeURIComponent(senderAddress);
+  } catch {
+    return null;
+  }
+}
 
-    const orangeUrl =
-      `https://api.orange.com/smsmessaging/v1/outbound/${encodedSender}/requests`;
+// =========================
+// SMS ORANGE
+// =========================
+apiRouter.post("/orange/sms", verifyFirebaseToken, async (req: any, res: any) => {
+  const { to, message } = req.body;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+  if (!to || !message) {
+    return res.status(400).json({ error: "Missing data" });
+  }
 
-    try {
-      const response = await fetch(orangeUrl, {
+  const userDoc = await admin.firestore()
+    .collection("users")
+    .doc(req.user.uid)
+    .get();
+
+  const role = userDoc.data()?.role;
+
+  if (role !== "ADMIN" && role !== "SURVEILLANT") {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  const token = await getOrangeToken();
+  if (!token) return res.status(503).json({ error: "Orange unavailable" });
+
+  const cleanTo = to.replace(/[^0-9]/g, "").slice(-9);
+  const formattedTo = `tel:+221${cleanTo}`;
+
+  try {
+    const response = await fetch(
+      `https://api.orange.com/smsmessaging/v1/outbound/tel%3A%2B221777154775/requests`,
+      {
         method: "POST",
-        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
-          Accept: "application/json",
         },
         body: JSON.stringify({
           outboundSMSMessageRequest: {
             address: formattedTo,
-            senderAddress,
-            senderName,
+            senderAddress: "tel:+221777154775",
+            senderName: "LTPFatick",
             outboundSMSTextMessage: { message },
           },
         }),
-      });
-
-      clearTimeout(timeout);
-
-      const text = await response.text();
-      let result;
-
-      try {
-        result = JSON.parse(text);
-      } catch {
-        result = text;
       }
+    );
 
-      if (response.ok) {
-        return res.json({ success: true, result });
-      }
+    const data = await response.json();
 
-      return res.status(response.status).json({
-        success: false,
-        error: result,
-      });
+    return res.json({ success: true, data });
 
-    } catch (error: any) {
-      clearTimeout(timeout);
+  } catch {
+    return res.status(500).json({ error: "SMS failed" });
+  }
+});
 
-      if (error.name === "AbortError") {
-        return res.status(504).json({ error: "Orange timeout (20s)" });
-      }
+// =========================
+// FRONTEND
+// =========================
+const distPath = path.join(process.cwd(), "dist");
 
-      return res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  // =========================
-  // FRONTEND (PROD / DEV)
-  // =========================
-  const distPath = path.join(process.cwd(), "dist");
-
+async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
+      server: { middlewareMode: true },
       appType: "spa",
     });
 
@@ -284,17 +236,13 @@ async function startServer() {
   } else {
     app.use(express.static(distPath));
 
-    app.use((req, res, next) => {
-      if (req.method !== "GET") return next();
+    app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  // =========================
-  // START SERVER
-  // =========================
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on ${PORT}`);
   });
 }
 

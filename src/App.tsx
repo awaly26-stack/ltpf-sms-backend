@@ -14,7 +14,7 @@ import { Modal } from './components';
 import { StudentDetail } from './StudentDetail';
 import { TeacherDetail } from './TeacherDetail';
 import { StaffDetail } from './StaffDetail';
-import { Messaging } from './Messaging';
+import { Messaging } from './messaging';
 import { generateMatricule, toPlainObject, sendSMS, sendAbsenceSMS } from './utils';
 
 import { HomeView } from './HomeView';
@@ -216,9 +216,9 @@ const App: React.FC = () => {
     // Mise à jour de la modal locale pour un rendu immédiat si besoin
     setSelectedEventForComments({...selectedEventForComments, comments: updatedComments});
   };
-  const verifySuperAdminCode = async (code: string): Promise<boolean> => {
+ const verifySuperAdminCode = async (code: string): Promise<boolean> => {
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/super-admin`, {
+    const res = await fetch("/api/auth/super-admin", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -226,8 +226,11 @@ const App: React.FC = () => {
       body: JSON.stringify({ code }),
     });
 
+    if (!res.ok) return false;
+
     const data = await res.json();
     return data.success === true;
+
   } catch (err) {
     return false;
   }
@@ -636,36 +639,51 @@ if (isValid) {
     } catch (e) { alert("Erreur lors du reset professeurs."); } finally { setLoading(false); }
   };
 
- const handleGenerateAiSummary = async () => {
+const handleGenerateAiSummary = async () => {
   if (isAiLoading) return;
 
   setIsAiLoading(true);
   setAiSummary(null);
 
   try {
-    const token = await auth.currentUser?.getIdToken();
+    // ✅ sécurité auth
+    if (!auth.currentUser) {
+      throw new Error("User not authenticated");
+    }
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/ai/summarize`, {
+    const token = await auth.currentUser.getIdToken();
+
+    const response = await fetch("/api/ai/summarize", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        prompt: `En tant qu'assistant du Lycée Technique de Fatick, analyse : Taux de présence: ${studentStats.presenceRate}%, Total: ${studentStats.totalStudents}. Génère un court message de motivation (max 20 mots).`
+        prompt: `En tant qu'assistant du Lycée Technique de Fatick, analyse : 
+Taux de présence: ${studentStats.presenceRate}%, 
+Total: ${studentStats.totalStudents}. 
+Génère un court message de motivation (max 20 mots).`
       }),
     });
 
+    // ✅ check serveur
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
     const data = await response.json();
 
-    setAiSummary(data.text || "Erreur IA");
+    setAiSummary(data.text || "Réponse IA vide");
+
   } catch (error) {
+    console.error("Erreur IA:", error);
+
     setAiSummary("Bienvenue sur LTP Silicon Campus. Excellence et Rigueur.");
   } finally {
     setIsAiLoading(false);
   }
 };
-
   const studentStats = useMemo(() => {
     const total = students.length || 1;
     const present = students.filter(s => s.isPresent).length;
