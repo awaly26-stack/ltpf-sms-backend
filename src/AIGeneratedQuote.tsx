@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Quote, Sparkles, RefreshCw, Loader2, Bot } from 'lucide-react';
 import { auth } from './firebaseConfig';
+import { GoogleGenAI } from "@google/genai";
 
 export const AIGeneratedQuote: React.FC = () => {
   const [quote, setQuote] = useState<string | null>(null);
@@ -60,33 +61,55 @@ Réponds uniquement en JSON :
       // =========================
       // API CALL
       // =========================
-      const response = await fetch("/api/ai/summarize", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ prompt })
-      });
+ const generateQuote = useCallback(async (force = false) => {
+  setIsLoading(true);
+  setError(false);
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
+  try {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-      const data = await response.json();
+    if (!apiKey) throw new Error("Missing API key");
 
-      // =========================
-      // SAFE PARSE
-      // =========================
-      let parsed: any = {};
+    const ai = new GoogleGenAI({ apiKey });
 
-      if (typeof data.text === "string") {
-        try {
-          parsed = JSON.parse(data.text);
-        } catch {
-          console.warn("Réponse IA non JSON:", data.text);
-        }
-      }
+    const prompt = `
+Donne une citation inspirante pour des élèves du Sénégal.
+Réponds uniquement en JSON :
+{"citation":"...","auteur":"..."}
+`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: prompt,
+    });
+
+    // =========================
+    // EXTRACTION SAFE TEXTE
+    // =========================
+    const text =
+      response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    // =========================
+    // PARSING SAFE JSON
+    // =========================
+    let parsed = { citation: "", auteur: "" };
+
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      console.warn("Réponse IA non JSON:", text);
+    }
+
+    setQuote(parsed.citation || "Erreur de génération");
+    setAuthor(parsed.auteur || "Inconnu");
+
+  } catch (err) {
+    console.error("AI error:", err);
+    setError(true);
+  } finally {
+    setIsLoading(false);
+  }
+}, []);
 
       const newQuote =
         parsed.citation ||

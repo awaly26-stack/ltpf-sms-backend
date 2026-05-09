@@ -1,34 +1,32 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
-  Users, Home, LogOut, Star, Landmark, ShieldCheck, MessageSquare, Loader2, Plus, RefreshCw, FileDown, ChevronRight, Trash2, FileText, Printer, Sun, Moon, Package, Hammer, Layers, ShieldAlert, GraduationCap, Building2, BookOpen, UserPlus, Shield, Megaphone, AlertCircle, Send, Edit, Settings, Heart
+  Loader2, Plus, Trash2, Edit, Megaphone, AlertCircle, Send, Heart, Settings, MessageSquare, UserPlus, ChevronRight, Printer, FileDown
 } from 'lucide-react';
-// Fix: Removed missing modular firebase imports, relying on compat objects from firebaseConfig
 import { jsPDF } from "jspdf";
 
-
 import { db, auth } from './firebaseConfig';
-import { Student, Teacher, SchoolClass, Subject, SchoolEvent, User, Role, InventoryItem,EventType, Comment } from './types';
+import { Student, Teacher, SchoolClass, Subject, SchoolEvent, User, Role, InventoryItem, EventType, Comment, AbsenceLog } from './types';
 import { ADMIN_KEY, INITIAL_LEVELS, INITIAL_FIELDS, INITIAL_DIPLOMAS } from './constants';
 import { Modal } from './components';
 import { StudentDetail } from './StudentDetail';
 import { TeacherDetail } from './TeacherDetail';
 import { StaffDetail } from './StaffDetail';
 import { Messaging } from './messaging';
-import { generateMatricule, toPlainObject, sendSMS, sendAbsenceSMS } from './utils';
+import { generateMatricule, toPlainObject, sendSMS, sendAbsenceSMS, fetchWithRetry } from './utils';
 
 import { HomeView } from './HomeView';
 import { CampusView } from './CampusView';
 import { AdminView } from './AdminView';
 
-
-
+import { useAuth } from './AuthContext';
+import { Header } from './Header';
+import { Login } from './Login';
+import { Navigation, TabType } from './Navigation';
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'list' | 'admin' | 'chat'>('home');
+  const { currentUser, loading, isAuthReady, isStaff, isSuperAdmin } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -51,7 +49,7 @@ const App: React.FC = () => {
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [chatWithStudentId, setChatWithStudentId] = useState<string | null>(null);
   const [selectedEventForComments, setSelectedEventForComments] = useState<SchoolEvent | null>(null);
-  const [loginCode, setLoginCode] = useState('');
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
   
@@ -61,6 +59,8 @@ const App: React.FC = () => {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
+  const [isManageEventsOpen, setIsManageEventsOpen] = useState(false); 
+  const [editingEvent, setEditingEvent] = useState<SchoolEvent | null>(null); 
   const [isManageTeachersOpen, setIsManageTeachersOpen] = useState(false);
   const [isManageClassesOpen, setIsManageClassesOpen] = useState(false);
   const [isManageSubjectsOpen, setIsManageSubjectsOpen] = useState(false);
@@ -84,10 +84,84 @@ const App: React.FC = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
 
-  const isSuperAdmin = useMemo(() => currentUser?.role === 'ADMIN' || currentUser?.id === 'admin_ltpf', [currentUser]);
-  const isStaff = useMemo(() => currentUser && currentUser.role !== 'ELEVE', [currentUser]);
-  const isFieldStaff = useMemo(() => currentUser?.role === 'SURVEILLANT', [currentUser]);
+  const studentStats = useMemo(() => {
+    const total = students.length || 1;
+    const presentCount = students.filter(s => s.isPresent).length;
+    
+    let allGrades: number[] = [];
+    students.forEach(s => {
+      if (s.grades && s.grades.length > 0) {
+        allGrades.push(...s.grades.map(g => g.value));
+      }
+    });
 
+    const sortedForTrophy = [...students].sort((a, b) => {
+      // 1. Priorité à l'assiduité (Moins d'absences injustifiées)
+      if ((a.unjustifiedAbsences || 0) !== (b.unjustifiedAbsences || 0)) {
+        return (a.unjustifiedAbsences || 0) - (b.unjustifiedAbsences || 0);
+      }
+      // 2. Priorité au mérite (Plus de badges/prix)
+      if ((b.badges?.length || 0) !== (a.badges?.length || 0)) {
+        return (b.badges?.length || 0) - (a.badges?.length || 0);
+      }
+      // 3. Priorité à l'engagement (Plus de défis complétés)
+      return (b.challengeActions?.length || 0) - (a.challengeActions?.length || 0);
+    });
+
+    return {
+      presenceRate: Math.round((presentCount / total) * 100),
+      totalStudents: students.length,
+      topStudent: sortedForTrophy[0] || null
+    };
+  }, [students]);
+
+  const filteredStudents = useMemo(() => {
+    let res = students;
+    if (selectedClassFilter !== 'all') res = res.filter(s => s.classId === selectedClassFilter);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      res = res.filter(s => {
+        const fn = s.firstName || "";
+        const n = s.name || "";
+        const m = s.matricule || "";
+        return `${fn} ${n}`.toLowerCase().includes(q) || m.toLowerCase().includes(q);
+      });
+    }
+    return res;
+  }, [students, selectedClassFilter, searchQuery]);
+
+  const handleGenerateAi = async () => {
+    if (isAiLoading) return;
+    setIsAiLoading(true);
+    try {
+      const prompt = `Fais un court résumé motivant de la situation actuelle au Lycée Technique de Fatick en te basant sur ces infos :
+      - Taux de présence moyen : ${studentStats.presenceRate}%
+      - Nombre d'élèves : ${studentStats.totalStudents}
+      - Top élève : ${studentStats.topStudent?.firstName} ${studentStats.topStudent?.name}
+      - Événements récents : ${events.length} annonces.
+      Fais-le en 3 phrases maximum, ton inspirant.`;
+
+      const token = await auth.currentUser?.getIdToken();
+
+      const response = await fetchWithRetry("/api/ai/summarize", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok) throw new Error(`Erreur serveur IA: ${response.status}`);
+      const data = await response.json();
+      setAiSummary(data.text || "Erreur de résumé");
+    } catch (e) {
+      console.error("Gemini summary error:", e);
+      setAiSummary("Impossible de générer le résumé pour le moment.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -96,38 +170,6 @@ const App: React.FC = () => {
   }, [theme]);
 
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-
-  const saveUserSession = useCallback((user: User) => {
-    try {
-      const plain = toPlainObject(user);
-      localStorage.setItem('user_session', JSON.stringify(plain));
-    } catch (e) {
-      console.error("Session serialization error:", e);
-    }
-  }, []);
-
-  const initAuth = useCallback(async () => {
-    setLoading(true);
-    try {
-      const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-        if (!firebaseUser) {
-          try { await auth.signInAnonymously(); } catch (e) { console.error("Auth anonyme failed:", e); }
-        }
-        setIsAuthReady(true);
-        const saved = localStorage.getItem('user_session');
-        if (saved) {
-          try { setCurrentUser(JSON.parse(saved)); } catch (e) { localStorage.removeItem('user_session'); }
-        }
-        setLoading(false);
-      });
-      return unsubscribe;
-    } catch (err) { setLoading(false); }
-  }, []);
-
-  useEffect(() => {
-    const unsub = initAuth();
-    return () => { unsub.then(u => u && u()); };
-  }, [initAuth]);
 
   useEffect(() => {
     if (!isAuthReady || !currentUser || !auth.currentUser) return;
@@ -154,14 +196,15 @@ const App: React.FC = () => {
     const unsubStaff = db.collection("users").onSnapshot((snap) => setAllStaff(snap.docs.filter(d => d.data().role !== 'ELEVE').map(d => ({ id: d.id, ...d.data() } as User))));
     const unsubInventory = db.collection("inventory").onSnapshot((snap) => setInventory(snap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryItem))));
 
-    return () => { unsubStudents(); unsubTeachers(); unsubClasses(); unsubEvents(); unsubStaff(); unsubInventory(); };
+    return () => { unsubStudents(); unsubTeachers(); unsubClasses(); unsubSubjects(); unsubEvents(); unsubStaff(); unsubInventory(); };
   }, [isAuthReady, currentUser]);
 
   const handleUpdateStudent = async (s: Student) => {
     const {id, ...data} = toPlainObject(s);
     await db.collection("students").doc(id).update(data);
   };
-   const handlePresence = async (student: Student, isPresent: boolean) => {
+
+  const handlePresence = async (student: Student, isPresent: boolean) => {
     if (!isStaff) return;
     
     try {
@@ -186,8 +229,8 @@ const App: React.FC = () => {
           const smsSuccess = await sendAbsenceSMS(student.emergencyPhone, `${student.firstName} ${student.name}`);
           if (!smsSuccess) {
             alert("⚠️ L'absence a été enregistrée mais le SMS n'a pas pu être envoyé (Vérifiez la configuration Orange).");
+          }
         }
-      }
       }
       
       const { id, ...data } = toPlainObject(updatedStudent);
@@ -216,69 +259,7 @@ const App: React.FC = () => {
     // Mise à jour de la modal locale pour un rendu immédiat si besoin
     setSelectedEventForComments({...selectedEventForComments, comments: updatedComments});
   };
- const verifySuperAdminCode = async (code: string): Promise<boolean> => {
-  try {
-    const res = await fetch("/api/auth/super-admin", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ code }),
-    });
 
-    if (!res.ok) return false;
-
-    const data = await res.json();
-    return data.success === true;
-
-  } catch (err) {
-    return false;
-  }
-};
-  const handleLogin = async () => {
-    const rawInput = loginCode.trim();
-    if (!rawInput) return;
-  
-    
-    // Normalisation pour accepter majuscules et minuscules
-    const normalizedInputUpper = rawInput.toUpperCase();
-    const normalizedInputLower = rawInput.toLowerCase();
-    
-    setLoading(true);
-    try {
-      // Comparaison Super Admin (insensible à la casse)
-     const isValid = await verifySuperAdminCode(rawInput);
-
-if (isValid) {
-  const adminUser: User = { id: 'admin_ltpf', name: 'ADMIN LTP', role: 'ADMIN' };
-  setCurrentUser(adminUser);
-  saveUserSession(adminUser);
-  return;
-}
-      
-      // Recherche Staff (Majuscule ou Minuscule)
-      let staffSnap = await db.collection("users").where("matricule", "in", [normalizedInputUpper, normalizedInputLower]).get();
-      if (!staffSnap.empty) {
-        const userData = { id: staffSnap.docs[0].id, ...staffSnap.docs[0].data() } as User;
-        setCurrentUser(userData); saveUserSession(userData);
-        return;
-      }
-      
-      // Recherche Élève (Majuscule ou Minuscule)
-      let studentSnap = await db.collection("students").where("matricule", "in", [normalizedInputUpper, normalizedInputLower]).get();
-      if (!studentSnap.empty) {
-        const studentData = studentSnap.docs[0].data() as Student;
-        const u: User = { id: studentSnap.docs[0].id, name: `${studentData.firstName} ${studentData.name}`, role: 'ELEVE', classId: studentData.classId };
-        setCurrentUser(u); saveUserSession(u);
-      } else { 
-        alert("Matricule inconnu. Vérifiez la saisie."); 
-      }
-    } catch (e) { 
-      alert("Erreur de connexion."); 
-    } finally { 
-      setLoading(false); 
-    }
-  };
 
   const handleAddEvent = async () => {
     if (!newEvent.title || !newEvent.description) {
@@ -299,10 +280,22 @@ if (isValid) {
     } catch (e) { alert("Erreur lors de la publication."); } finally { setLoading(false); }
   };
 
-  const handleLogout = async () => {
-    await auth.signOut();
-    setCurrentUser(null);
-    localStorage.removeItem('user_session');
+  const handleUpdateEvent = async () => {
+    if (!editingEvent || !editingEvent.title || !editingEvent.description) return;
+    setLoading(true);
+    try {
+      const {id, ...data} = toPlainObject(editingEvent);
+      await db.collection("events").doc(id).update(data);
+      setEditingEvent(null);
+    } catch (e) { alert("Erreur lors de la mise à jour."); } finally { setLoading(false); }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!window.confirm("Supprimer définitivement cette actualité ?")) return;
+    setLoading(true);
+    try {
+      await db.collection("events").doc(id).delete();
+    } catch (e) { alert("Erreur lors de la suppression."); } finally { setLoading(false); }
   };
 
   const handleAddStaff = async () => {
@@ -329,36 +322,15 @@ if (isValid) {
   };
 
   const handleAddClass = async () => {
-    if (!newClass.name) {
-      alert("Veuillez donner un nom à la classe (ex: Tle S3).");
-      return;
-    }
-    setLoading(true);
-    try {
-      await db.collection("classes").add(toPlainObject({ ...newClass, adminKey: ADMIN_KEY }));
-      setIsManageClassesOpen(false);
-      setNewClass({ name: '', level: INITIAL_LEVELS[0], field: INITIAL_FIELDS[0], diploma: INITIAL_DIPLOMAS[0] });
-    } catch (e) {
-      alert("Erreur lors de la création de la classe.");
-    } finally {
-      setLoading(false);
-    }
+    if (!newClass.name) return;
+    await db.collection("classes").add(toPlainObject({ ...newClass, adminKey: ADMIN_KEY }));
+    setIsManageClassesOpen(false);
   };
 
   const handleAddSubject = async () => {
-    if (!newSubject.name) {
-      alert("Veuillez donner un nom à la matière.");
-      return;
-    }
-    setLoading(true);
-    try {
-      await db.collection("subjects").add(toPlainObject({ ...newSubject, adminKey: ADMIN_KEY }));
-      setNewSubject({ name: '', category: 'GENERAL', coefficient: 1 });
-    } catch (e) {
-      alert("Erreur lors de la création de la matière.");
-    } finally {
-      setLoading(false);
-    }
+    if (!newSubject.name) return;
+    await db.collection("subjects").add(toPlainObject({ ...newSubject, adminKey: ADMIN_KEY }));
+    setNewSubject({ name: '', category: 'GENERAL', coefficient: 1 });
   };
 
   const handleAddItem = async () => {
@@ -636,306 +608,32 @@ if (isValid) {
         });
       });
       await batch.commit();
-    } catch (e) { alert("Erreur lors du reset professeurs."); } finally { setLoading(false); }
+    } catch (e) { alert("Erreur."); } finally { setLoading(false); }
   };
 
-const handleGenerateAiSummary = async () => {
-  if (isAiLoading) return;
 
-  setIsAiLoading(true);
-  setAiSummary(null);
-
-  try {
-    // ✅ sécurité auth
-    if (!auth.currentUser) {
-      throw new Error("User not authenticated");
-    }
-
-    const token = await auth.currentUser.getIdToken();
-
-    const response = await fetch("/api/ai/summarize", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        prompt: `En tant qu'assistant du Lycée Technique de Fatick, analyse : 
-Taux de présence: ${studentStats.presenceRate}%, 
-Total: ${studentStats.totalStudents}. 
-Génère un court message de motivation (max 20 mots).`
-      }),
-    });
-
-    // ✅ check serveur
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    setAiSummary(data.text || "Réponse IA vide");
-
-  } catch (error) {
-    console.error("Erreur IA:", error);
-
-    setAiSummary("Bienvenue sur LTP Silicon Campus. Excellence et Rigueur.");
-  } finally {
-    setIsAiLoading(false);
-  }
-};
-  const studentStats = useMemo(() => {
-    const total = students.length || 1;
-    const present = students.filter(s => s.isPresent).length;
-    const sortedForTrophy = [...students].sort((a, b) => {
-      // 1. Priorité à l'assiduité (Moins d'absences injustifiées)
-      if ((a.unjustifiedAbsences || 0) !== (b.unjustifiedAbsences || 0)) {
-        return (a.unjustifiedAbsences || 0) - (b.unjustifiedAbsences || 0);
-      }
-      // 2. Priorité au mérite (Plus de badges/prix)
-      if ((b.badges?.length || 0) !== (a.badges?.length || 0)) {
-        return (b.badges?.length || 0) - (a.badges?.length || 0);
-      }
-      // 3. Priorité à l'engagement (Plus de défis complétés)
-      return (b.challengeActions?.length || 0) - (a.challengeActions?.length || 0);
-    });
-    return { presenceRate: Math.round((present / total) * 100), totalStudents: students.length, topStudent: sortedForTrophy[0] || null  };
-  }, [students]);
-
-  const currentStudent = useMemo(() => {
-    return students.find(s => s.id === currentUser?.id);
-  }, [students, currentUser]);
-
-  const filteredStudents = useMemo(() => {
-    let res = students;
-    if (isFieldStaff && !isSuperAdmin) {
-      const myClasses = currentUser?.assignedClassIds || [];
-      res = res.filter(s => myClasses.includes(s.classId));
-    }
-    if (selectedClassFilter !== 'all') res = res.filter(s => s.classId === selectedClassFilter);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      res = res.filter(s => (s.firstName || "").toLowerCase().includes(q) || (s.name || "").toLowerCase().includes(q) || (s.matricule || "").toLowerCase().includes(q));
-    }
-    return res;
-  }, [students, selectedClassFilter, searchQuery, isFieldStaff, isSuperAdmin, currentUser]);
-
-  if (loading && !isAuthReady) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-indigo-500"><Loader2 className="animate-spin" size={48} /></div>;
-
-  if (!currentUser) return (
-    <div className="min-h-screen flex items-center justify-center p-8 bg-slate-100">
-      <div className="w-full max-w-md space-y-12 animate-in fade-in duration-700">
-        <div className="text-center"><h1 className="text-5xl font-black text-slate-400 uppercase tracking-tighter">EduTech<span className="text-indigo-600">Pro</span></h1><p className="text-lg font-bold text-slate-400 uppercase tracking-[0.4em]">LTPF</p></div>
-        <div className="glass p-10 rounded-[3.5rem] space-y-6 shadow-2xl">
-          <input type="text" value={loginCode} onChange={e => setLoginCode(e.target.value)} placeholder="VOTRE MATRICULE" className="w-full bg-slate-900 rounded-2xl py-6 px-6 text-white text-center font-black outline-none border border-transparent focus:border-indigo-500 transition-all placeholder:text-slate-700" />
-          <button onClick={handleLogin} className="w-full bg-indigo-600 text-white py-6 rounded-2xl font-black uppercase shadow-xl active:scale-95 transition-all">Accéder</button>
-        </div>
-        <p className="text-center text-[14px] font-bold text-slate-400 uppercase tracking-widest opacity-50">Lycée Technique & Professionnel de Fatick</p>
-      </div>
+  if (loading || !isAuthReady) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-indigo-500">
+      <Loader2 className="animate-spin" size={48} />
     </div>
   );
 
+  if (!currentUser) return <Login />;
+
   return (
-    <div className="h-full w-full flex flex-col bg-slate-700 overflow-hidden transition-colors duration-300">
-      <header className="px-8 py-6 flex items-center justify-between z-30 shrink-0">
-        <div className="flex items-center gap-3"><Landmark className="text-indigo-500" size={24} /><h2 className="text-sm font-black text-white uppercase">LTP Fatick</h2></div>
-        <div className="flex items-center gap-2">
-          <button onClick={toggleTheme} className="p-3 bg-white/5 text-indigo-400 rounded-2xl active:scale-95 transition-all">{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
-          <button onClick={handleLogout} className="p-3 bg-white/5 text-rose-500 rounded-2xl active:scale-95 transition-all"><LogOut size={18}/></button>
-        </div>
-      </header>
+    <div className="h-full w-full flex flex-col bg-slate-950 overflow-hidden transition-colors duration-300">
+      <Header theme={theme} toggleTheme={toggleTheme} />
 
       <main className="flex-1 overflow-y-auto px-6 pb-32">
-        {activeTab === 'home' && <HomeView events={events} students={students} classes={classes} studentStats={studentStats} aiSummary={aiSummary} isAiLoading={isAiLoading} onGenerateAi={handleGenerateAiSummary} isStaff={isStaff} onNavigateToAdmin={() => setActiveTab('admin')} currentStudent={students.find(s => s.id === currentUser.id)} onOpenStudentProfile={setSelectedStudentId} onUpdateStudent={handleUpdateStudent} onLikeEvent={handleLikeEvent} onOpenComments={setSelectedEventForComments} />}
-        {activeTab === 'list' && <CampusView students={filteredStudents} teachers={teachers} classes={classes} allStaff={allStaff} searchQuery={searchQuery} setSearchQuery={setSearchQuery} selectedClassFilter={selectedClassFilter} setSelectedClassFilter={setSelectedClassFilter} onSelectStudent={setSelectedStudentId} onSelectTeacher={setSelectedTeacherId} onSelectStaff={setSelectedStaffId} isStaff={isStaff}  onPresenceChange={handlePresence} />}
-        {activeTab === 'admin' && isStaff && <AdminView isSuperAdmin={isSuperAdmin} allStaff={allStaff} students={students} teachers={teachers} onSelectStaff={setSelectedStaffId} onOpenAddStaff={() => setIsAddStaffOpen(true)} onOpenAddStudent={() => setIsAddStudentOpen(true)} onOpenAddTeacher={() => setIsAddTeacherOpen(true)} onOpenAddEvent={() => setIsAddEventOpen(true)} onOpenManageClasses={() => setIsManageClassesOpen(true)}  onOpenManageSubjects={() => setIsManageSubjectsOpen(true)} onOpenInventory={() => setIsInventoryOpen(true)} onOpenExportAbsences={() => setIsExportAbsencesOpen(true)} onOpenExportTeacherAbsences={generateTeachersBilanPDF} onOpenExportWeeklyTeacherAbsences={generateWeeklyTeachersBilanPDF} onOpenManageStaff={() => setIsManageStaffOpen(true)} onOpenManageTeachers={() => setIsManageTeachersOpen(true)} onResetCounters={handleResetAllAbsences} onResetTeacherCounters={handleResetTeacherAbsences} />}
+        {activeTab === 'home' && <HomeView events={events} students={students} classes={classes} studentStats={studentStats} aiSummary={aiSummary} isAiLoading={isAiLoading} onGenerateAi={handleGenerateAi} onNavigateToAdmin={() => setActiveTab('admin')} onOpenStudentProfile={setSelectedStudentId} onUpdateStudent={handleUpdateStudent} onLikeEvent={handleLikeEvent} onOpenComments={setSelectedEventForComments} />}
+        {activeTab === 'list' && <CampusView students={filteredStudents} teachers={teachers} classes={classes} allStaff={allStaff} searchQuery={searchQuery} setSearchQuery={setSearchQuery} selectedClassFilter={selectedClassFilter} setSelectedClassFilter={setSelectedClassFilter} onSelectStudent={setSelectedStudentId} onSelectTeacher={setSelectedTeacherId} onSelectStaff={setSelectedStaffId} onPresenceChange={handlePresence} />}
+        {activeTab === 'admin' && isStaff && <AdminView allStaff={allStaff} students={students} teachers={teachers} onSelectStaff={setSelectedStaffId} onOpenAddStaff={() => setIsAddStaffOpen(true)} onOpenAddStudent={() => setIsAddStudentOpen(true)} onOpenAddTeacher={() => setIsAddTeacherOpen(true)} onOpenAddEvent={() => setIsAddEventOpen(true)} onOpenManageEvents={() => setIsManageEventsOpen(true)} onOpenManageClasses={() => setIsManageClassesOpen(true)} onOpenManageSubjects={() => setIsManageSubjectsOpen(true)} onOpenInventory={() => setIsInventoryOpen(true)} onOpenExportAbsences={() => setIsExportAbsencesOpen(true)} onOpenExportTeacherAbsences={generateTeachersBilanPDF} onOpenExportWeeklyTeacherAbsences={generateWeeklyTeachersBilanPDF} onOpenManageStaff={() => setIsManageStaffOpen(true)} onOpenManageTeachers={() => setIsManageTeachersOpen(true)} onResetCounters={handleResetAllAbsences} onResetTeacherCounters={handleResetTeacherAbsences} />}
         {activeTab === 'chat' && <Messaging currentUser={currentUser} students={students} targetStudentId={chatWithStudentId} onClose={() => setActiveTab('home')} />}
       </main>
 
-      <nav className="fixed bottom-6 inset-x-0 mx-auto w-[92%] max-w-md glass h-20 rounded-full flex items-center justify-around px-6 z-40 shadow-2xl animate-in slide-in-from-bottom duration-500">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'home' ? 'text-indigo-500 scale-110' : 'text-slate-500'}`}><Home size={22}/><span className="text-[8px] font-black uppercase">Home</span></button>
-        <button onClick={() => setActiveTab('list')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'list' ? 'text-indigo-500 scale-110' : 'text-slate-500'}`}><Users size={22}/><span className="text-[8px] font-black uppercase">Campus</span></button>
-        <button onClick={() => setActiveTab('chat')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'chat' ? 'text-indigo-500 scale-110' : 'text-slate-500'}`}><MessageSquare size={22}/><span className="text-[8px] font-black uppercase">Chat</span></button>
-        {isStaff && <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'admin' ? 'text-indigo-500 scale-110' : 'text-slate-500'}`}><ShieldCheck size={22}/><span className="text-[8px] font-black uppercase">Pilote</span></button>}
-      </nav>
+      <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* MODAL GESTION SURVEILLANTS */}
-      <Modal isOpen={isManageStaffOpen} onClose={() => setIsManageStaffOpen(false)} title="Surveillants">
-        <div className="space-y-6">
-          <button onClick={() => { setIsManageStaffOpen(false); setIsAddStaffOpen(true); }} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">
-            <UserPlus size={16} /> Nouveau Surveillant
-          </button>
-          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
-            {allStaff.filter(s => s.role === 'SURVEILLANT').length > 0 ? (
-              allStaff.filter(s => s.role === 'SURVEILLANT').map(staff => (
-                <div key={staff.id} onClick={() => { setSelectedStaffId(staff.id); setIsManageStaffOpen(false); }} className="glass p-5 rounded-3xl flex items-center justify-between group cursor-pointer border border-white/5 hover:bg-white/5 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 font-black text-xs uppercase">
-                      {(staff.name || '?')[0]}
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase text-white leading-none">{staff.name}</p>
-                      <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest mt-1">ID: {staff.matricule || 'Sans ID'}</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="text-slate-600 group-hover:text-emerald-500 transition-colors" />
-                </div>
-              ))
-            ) : (
-              <div className="py-10 text-center opacity-30">
-                <Shield size={40} className="mx-auto mb-3" />
-                <p className="text-[9px] font-black uppercase tracking-widest">Aucun surveillant</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL AJOUT SURVEILLANT */}
-      <Modal isOpen={isAddStaffOpen} onClose={() => setIsAddStaffOpen(false)} title="Créer Compte Staff">
-        <div className="space-y-4">
-          <div className="space-y-1">
-             <label className="text-[8px] font-black text-slate-500 uppercase ml-2 tracking-widest">Prénom</label>
-             <input type="text" value={newStaff.firstName} onChange={e => setNewStaff({...newStaff, firstName: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none border border-white/5 focus:border-emerald-500/50" />
-          </div>
-          <div className="space-y-1">
-             <label className="text-[8px] font-black text-slate-500 uppercase ml-2 tracking-widest">Nom de famille</label>
-             <input type="text" value={newStaff.name} onChange={e => setNewStaff({...newStaff, name: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none border border-white/5 focus:border-emerald-500/50" />
-          </div>
-          <div className="space-y-1">
-             <label className="text-[8px] font-black text-slate-500 uppercase ml-2 tracking-widest">Rôle Direction</label>
-             <select value={newStaff.role} onChange={e => setNewStaff({...newStaff, role: e.target.value as Role})} className="w-full bg-slate-900 p-5 rounded-2xl text-[10px] font-black uppercase text-white outline-none border border-white/5">
-                <option value="SURVEILLANT">Surveillant</option>
-                <option value="SG">Surveillant Général</option>
-                <option value="CT">Chef des Travaux</option>
-                <option value="DE">Dir. Études</option>
-                <option value="PROVISEUR">Proviseur</option>
-             </select>
-          </div>
-          <button onClick={handleAddStaff} className="w-full bg-emerald-600 text-white py-6 rounded-2xl font-black uppercase text-[11px] mt-2 shadow-xl active:scale-95 transition-all">Valider la création</button>
-        </div>
-      </Modal>
-
-      {/* MODAL GESTION PROFESSEURS */}
-      <Modal isOpen={isManageTeachersOpen} onClose={() => setIsManageTeachersOpen(false)} title="Professeurs">
-        <div className="space-y-6">
-          <button onClick={() => { setIsManageTeachersOpen(false); setIsAddTeacherOpen(true); }} className="w-full bg-amber-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all">
-            <Plus size={16} /> Ajouter Professeur
-          </button>
-          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
-            {teachers.map(teacher => (
-              <div key={teacher.id} onClick={() => { setSelectedTeacherId(teacher.id); setIsManageTeachersOpen(false); }} className="glass p-5 rounded-3xl flex items-center justify-between group cursor-pointer border border-white/5 hover:bg-white/5 transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 font-black text-xs uppercase">
-                    {(teacher.firstName || '?')[0]}
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase text-white leading-none">{teacher.firstName} {teacher.name}</p>
-                    <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest mt-1">{teacher.phone || 'Pas de numéro'}</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-slate-600 group-hover:text-amber-500 transition-colors" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL AJOUT PROFESSEUR */}
-      <Modal isOpen={isAddTeacherOpen} onClose={() => setIsAddTeacherOpen(false)} title="Nouveau Professeur">
-        <div className="space-y-4">
-          <input type="text" placeholder="Prénom" value={newTeacher.firstName} onChange={e => setNewTeacher({...newTeacher, firstName: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none border border-white/5" />
-          <input type="text" placeholder="NOM" value={newTeacher.name} onChange={e => setNewTeacher({...newTeacher, name: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none border border-white/5" />
-          <input type="tel" placeholder="Téléphone" value={newTeacher.phone} onChange={e => setNewTeacher({...newTeacher, phone: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none border border-white/5" />
-          <button onClick={handleAddTeacher} className="w-full bg-amber-600 text-white py-6 rounded-2xl font-black uppercase text-[11px] shadow-xl active:scale-95 transition-all">Inscrire l'Enseignant</button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isManageClassesOpen} onClose={() => setIsManageClassesOpen(false)} title="Gestion Classes">
-        <div className="space-y-6">
-          <div className="glass p-6 rounded-[2.5rem] border border-indigo-500/20 space-y-4 shadow-xl">
-             <div className="space-y-1">
-                <label className="text-[8px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nom de la classe</label>
-                <input type="text" placeholder="Ex: Tle S3, 1ère Année Méca..." value={newClass.name} onChange={e => setNewClass({...newClass, name: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-white font-bold outline-none border border-white/5 focus:border-indigo-500/50" />
-             </div>
-             <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-slate-400 uppercase ml-2 tracking-widest">Niveau</label>
-                  <select value={newClass.level} onChange={e => setNewClass({...newClass, level: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-[10px] font-black uppercase text-white outline-none border border-white/5">{INITIAL_LEVELS.map(lvl => <option key={lvl} value={lvl}>{lvl}</option>)}</select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-slate-400 uppercase ml-2 tracking-widest">Diplôme</label>
-                  <select value={newClass.diploma} onChange={e => setNewClass({...newClass, diploma: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-[10px] font-black uppercase text-white outline-none border border-white/5">{INITIAL_DIPLOMAS.map(dip => <option key={dip} value={dip}>{dip}</option>)}</select>
-                </div>
-             </div>
-             <div className="space-y-1">
-                <label className="text-[8px] font-black text-slate-400 uppercase ml-2 tracking-widest">Filière / Série</label>
-                <select value={newClass.field} onChange={e => setNewClass({...newClass, field: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-[10px] font-black uppercase text-white outline-none border border-white/5">{INITIAL_FIELDS.map(f => <option key={f} value={f}>{f}</option>)}</select>
-             </div>
-             <button onClick={handleAddClass} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-5 rounded-2xl font-black uppercase text-[11px] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">Créer la Classe</button>
-          </div>
-          <div className="grid grid-cols-1 gap-2 max-h-[40vh] overflow-y-auto pr-1">
-             {classes.map(cls => (
-               <div key={cls.id} className="glass p-5 rounded-3xl flex items-center justify-between group border border-white/5">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400 font-black text-xs uppercase">
-                      {(cls.name || '??').substring(0, 2)}
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase text-white">{cls.name}</p>
-                      <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest mt-1">{cls.level} • {cls.field}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => { if(window.confirm(`Supprimer ${cls.name} ?`)) db.collection("classes").doc(cls.id).delete(); }} className="p-2 text-rose-500/30 hover:text-rose-500 transition-colors"><Trash2 size={18} /></button>
-               </div>
-             ))}
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isManageSubjectsOpen} onClose={() => setIsManageSubjectsOpen(false)} title="Gestion Matières">
-        <div className="space-y-6">
-          <div className="glass p-6 rounded-[2.5rem] border border-teal-500/20 space-y-4 shadow-xl">
-             <div className="space-y-1">
-                <label className="text-[8px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nom de la matière</label>
-                <input type="text" placeholder="Ex: Mathématiques, Construction..." value={newSubject.name} onChange={e => setNewSubject({...newSubject, name: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-white font-bold outline-none border border-white/5 focus:border-teal-500/50" />
-             </div>
-             <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-slate-400 uppercase ml-2 tracking-widest">Catégorie</label>
-                  <select value={newSubject.category} onChange={e => setNewSubject({...newSubject, category: e.target.value as any})} className="w-full bg-slate-900/50 p-4 rounded-xl text-[10px] font-black uppercase text-white outline-none border border-white/5">
-                    <option value="GENERAL">Général</option>
-                    <option value="TECHNIQUE">Technique</option>
-                    <option value="PROFESSIONNEL">Professionnel</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-slate-400 uppercase ml-2 tracking-widest">Coefficient</label>
-                  <input type="number" min="1" max="10" value={newSubject.coefficient} onChange={e => setNewSubject({...newSubject, coefficient: parseInt(e.target.value) || 1})} className="w-full bg-slate-900/50 p-4 rounded-xl text-xs font-black text-white outline-none border border-white/5 focus:border-teal-500/50" />
-                </div>
-             </div>
-             <button onClick={handleAddSubject} className="w-full bg-teal-600 hover:bg-teal-700 text-white py-5 rounded-2xl font-black uppercase text-[11px] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">Ajouter Matière</button>
-          </div>
-          <div className="grid grid-cols-1 gap-2 max-h-[40vh] overflow-y-auto pr-1">
-             {subjects.map(subj => (
-               <div key={subj.id} className="glass p-5 rounded-3xl flex items-center justify-between group border border-white/5">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-teal-500/10 rounded-xl flex items-center justify-center text-teal-400 font-black text-xs uppercase">
-                      {(subj.name || '??').substring(0, 2)}
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase text-white">{subj.name}</p>
-                      <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest mt-1">Coeff: {subj.coefficient} • {subj.category}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => { if(window.confirm(`Supprimer ${subj.name} ?`)) db.collection("subjects").doc(subj.id).delete(); }} className="p-2 text-rose-500/30 hover:text-rose-500 transition-colors"><Trash2 size={18} /></button>
-               </div>
-             ))}
-          </div>
-        </div>
-      </Modal>
-
-       {/* MODAL COMMENTAIRES ACTUALITÉ */}
+      {/* MODAL COMMENTAIRES ACTUALITÉ */}
       <Modal isOpen={!!selectedEventForComments} onClose={() => setSelectedEventForComments(null)} title="Discussion Campus">
          <div className="space-y-6">
             <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
@@ -981,7 +679,78 @@ Génère un court message de motivation (max 20 mots).`
          </div>
       </Modal>
 
-       {/* MODAL PUBLIER ACTUALITÉ */}
+      {/* MODAL GESTION ACTUS */}
+      <Modal isOpen={isManageEventsOpen} onClose={() => setIsManageEventsOpen(false)} title="Gérer le Fil d'Actualité">
+        <div className="space-y-4">
+          <button onClick={() => { setIsManageEventsOpen(false); setIsAddEventOpen(true); }} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all">
+            <Plus size={16} /> Nouvelle Publication
+          </button>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+            {events.length > 0 ? events.map(ev => (
+              <div key={ev.id} className="glass p-5 rounded-[2rem] border border-white/5 space-y-3 hover:bg-white/5 transition-all">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase leading-none mb-1">{ev.type}</p>
+                    <h4 className="text-xs font-black uppercase text-white truncate max-w-[200px]">{ev.title}</h4>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => setEditingEvent(ev)} className="p-2.5 glass text-amber-500 rounded-xl hover:bg-amber-500 hover:text-white transition-all"><Edit size={16} /></button>
+                    <button onClick={() => handleDeleteEvent(ev.id)} className="p-2.5 glass text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+                <p className="text-[9px] text-slate-500 line-clamp-2 italic">"{ev.description}"</p>
+                <div className="flex items-center gap-3 pt-2">
+                   <span className="text-[7px] font-bold text-slate-600 uppercase">{new Date(ev.date).toLocaleDateString()}</span>
+                   <div className="flex items-center gap-1">
+                      <Heart size={10} className="text-rose-500" />
+                      <span className="text-[7px] font-black text-slate-500">{ev.likes || 0}</span>
+                   </div>
+                </div>
+              </div>
+            )) : (
+              <div className="py-20 text-center opacity-20">
+                <Megaphone size={40} className="mx-auto mb-4" />
+                <p className="text-[10px] font-black uppercase">Aucune actualité publiée</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL MODIFIER ACTUALITÉ */}
+      <Modal isOpen={!!editingEvent} onClose={() => setEditingEvent(null)} title="Modifier Publication">
+        <div className="space-y-4">
+          <div className="space-y-1">
+             <label className="text-[8px] font-black text-slate-500 uppercase ml-2 tracking-widest">Titre</label>
+             <input type="text" value={editingEvent?.title || ''} onChange={e => editingEvent && setEditingEvent({...editingEvent, title: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none border border-white/5 focus:border-indigo-500" />
+          </div>
+          <div className="space-y-1">
+             <label className="text-[8px] font-black text-slate-500 uppercase ml-2 tracking-widest">Description</label>
+             <textarea rows={4} value={editingEvent?.description || ''} onChange={e => editingEvent && setEditingEvent({...editingEvent, description: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-medium outline-none border border-white/5 focus:border-indigo-500" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+             <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-500 uppercase ml-2 tracking-widest">Émetteur</label>
+                <select value={editingEvent?.type} onChange={e => editingEvent && setEditingEvent({...editingEvent, type: e.target.value as EventType})} className="w-full bg-slate-900 p-5 rounded-2xl text-[10px] font-black uppercase text-white outline-none">
+                  <option value="PROVISEUR">Proviseur</option>
+                  <option value="DE_CT">DE / CT</option>
+                  <option value="SURVEILLANT_GEN">Surveillance Gén.</option>
+                  <option value="GOUVERNEMENT">Gouvernement Scol.</option>
+                </select>
+             </div>
+             <div className="flex flex-col justify-end">
+                <button onClick={() => editingEvent && setEditingEvent({...editingEvent, isUrgent: !editingEvent.isUrgent})} className={`flex items-center justify-center gap-2 p-5 rounded-2xl text-[9px] font-black uppercase transition-all ${editingEvent?.isUrgent ? 'bg-rose-600 text-white' : 'bg-slate-900 text-slate-500'}`}>
+                   Urgent ?
+                </button>
+             </div>
+          </div>
+          <button onClick={handleUpdateEvent} className="w-full bg-amber-600 text-white py-6 rounded-2xl font-black uppercase text-[11px] mt-2 shadow-xl active:scale-95 transition-all">
+            Mettre à jour l'information
+          </button>
+        </div>
+      </Modal>
+
+      {/* MODAL PUBLIER ACTUALITÉ */}
       <Modal isOpen={isAddEventOpen} onClose={() => setIsAddEventOpen(false)} title="Publier Actualité">
         <div className="space-y-4">
           <div className="space-y-1">
@@ -1014,17 +783,145 @@ Génère un court message de motivation (max 20 mots).`
         </div>
       </Modal>
 
+      {/* MODAL GESTION SURVEILLANTS */}
+      <Modal isOpen={isManageStaffOpen} onClose={() => setIsManageStaffOpen(false)} title="Surveillants">
+        <div className="space-y-6">
+          <button onClick={() => { setIsManageStaffOpen(false); setIsAddStaffOpen(true); }} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">
+            <UserPlus size={16} /> Nouveau Surveillant
+          </button>
+          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
+            {allStaff.filter(s => s.role === 'SURVEILLANT').map(staff => (
+              <div key={staff.id} onClick={() => { setSelectedStaffId(staff.id); setIsManageStaffOpen(false); }} className="glass p-5 rounded-3xl flex items-center justify-between group cursor-pointer border border-white/5 hover:bg-white/5 transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 font-black text-xs uppercase">{(staff.name || '?')[0]}</div>
+                  <div>
+                    <p className="text-xs font-black uppercase text-white leading-none">{staff.name}</p>
+                    <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest mt-1">ID: {staff.matricule || 'Sans ID'}</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-slate-600 group-hover:text-emerald-500 transition-colors" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL AJOUT SURVEILLANT */}
+      <Modal isOpen={isAddStaffOpen} onClose={() => setIsAddStaffOpen(false)} title="Créer Compte Staff">
+        <div className="space-y-4">
+          <input type="text" placeholder="Prénom" value={newStaff.firstName} onChange={e => setNewStaff({...newStaff, firstName: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none border border-white/5" />
+          <input type="text" placeholder="NOM" value={newStaff.name} onChange={e => setNewStaff({...newStaff, name: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none border border-white/5" />
+          <select value={newStaff.role} onChange={e => setNewStaff({...newStaff, role: e.target.value as Role})} className="w-full bg-slate-900 p-5 rounded-2xl text-[10px] font-black uppercase text-white outline-none">
+            <option value="SURVEILLANT">Surveillant</option>
+            <option value="SG">Surveillant Général</option>
+            <option value="CT">Chef des Travaux</option>
+            <option value="DE">Dir. Études</option>
+            <option value="PROVISEUR">Proviseur</option>
+          </select>
+          <button onClick={handleAddStaff} className="w-full bg-emerald-600 text-white py-6 rounded-2xl font-black uppercase text-[11px] shadow-xl">Valider la création</button>
+        </div>
+      </Modal>
+
+      {/* MODAL GESTION PROFESSEURS */}
+      <Modal isOpen={isManageTeachersOpen} onClose={() => setIsManageTeachersOpen(false)} title="Professeurs">
+        <div className="space-y-6">
+          <button onClick={() => { setIsManageTeachersOpen(false); setIsAddTeacherOpen(true); }} className="w-full bg-amber-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all">
+            <Plus size={16} /> Ajouter Professeur
+          </button>
+          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
+            {teachers.map(teacher => (
+              <div key={teacher.id} onClick={() => { setSelectedTeacherId(teacher.id); setIsManageTeachersOpen(false); }} className="glass p-5 rounded-3xl flex items-center justify-between group cursor-pointer border border-white/5 hover:bg-white/5">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 font-black text-xs uppercase">{(teacher.firstName || '?')[0]}</div>
+                  <div>
+                    <p className="text-xs font-black uppercase text-white leading-none">{teacher.firstName} {teacher.name}</p>
+                    <p className="text-[7px] font-bold text-slate-500 uppercase mt-1">{teacher.phone || 'Sans numéro'}</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-slate-600 group-hover:text-amber-500 transition-colors" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL AJOUT PROFESSEUR */}
+      <Modal isOpen={isAddTeacherOpen} onClose={() => setIsAddTeacherOpen(false)} title="Nouveau Professeur">
+        <div className="space-y-4">
+          <input type="text" placeholder="Prénom" value={newTeacher.firstName} onChange={e => setNewTeacher({...newTeacher, firstName: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none" />
+          <input type="text" placeholder="NOM" value={newTeacher.name} onChange={e => setNewTeacher({...newTeacher, name: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none" />
+          <input type="tel" placeholder="Téléphone" value={newTeacher.phone} onChange={e => setNewTeacher({...newTeacher, phone: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none" />
+          <button onClick={handleAddTeacher} className="w-full bg-amber-600 text-white py-6 rounded-2xl font-black uppercase text-[11px] shadow-xl">Inscrire l'Enseignant</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isManageClassesOpen} onClose={() => setIsManageClassesOpen(false)} title="Gestion Classes">
+        <div className="space-y-6">
+          <div className="glass p-6 rounded-[2.5rem] border border-indigo-500/20 space-y-4 shadow-xl">
+             <input type="text" placeholder="Nom de la classe..." value={newClass.name} onChange={e => setNewClass({...newClass, name: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-white font-bold outline-none" />
+             <div className="grid grid-cols-2 gap-3">
+                <select value={newClass.level} onChange={e => setNewClass({...newClass, level: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-[10px] font-black uppercase text-white outline-none">{INITIAL_LEVELS.map(lvl => <option key={lvl} value={lvl}>{lvl}</option>)}</select>
+                <select value={newClass.diploma} onChange={e => setNewClass({...newClass, diploma: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-[10px] font-black uppercase text-white outline-none">{INITIAL_DIPLOMAS.map(dip => <option key={dip} value={dip}>{dip}</option>)}</select>
+             </div>
+             <select value={newClass.field} onChange={e => setNewClass({...newClass, field: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-[10px] font-black uppercase text-white outline-none">{INITIAL_FIELDS.map(f => <option key={f} value={f}>{f}</option>)}</select>
+             <button onClick={handleAddClass} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-5 rounded-2xl font-black uppercase text-[11px] shadow-lg flex items-center justify-center gap-2">Créer la Classe</button>
+          </div>
+          <div className="grid grid-cols-1 gap-2 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
+             {classes.map(cls => (
+               <div key={cls.id} className="glass p-5 rounded-3xl flex items-center justify-between border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400 font-black text-xs uppercase">{(cls.name || '??').substring(0, 2)}</div>
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-700 dark:text-white">{cls.name}</p>
+                      <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest mt-1">{cls.level}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { if(window.confirm(`Supprimer ${cls.name} ?`)) db.collection("classes").doc(cls.id).delete(); }} className="p-2 text-rose-500/30 hover:text-rose-500"><Trash2 size={18} /></button>
+               </div>
+             ))}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isManageSubjectsOpen} onClose={() => setIsManageSubjectsOpen(false)} title="Gestion Matières">
+        <div className="space-y-6">
+          <div className="glass p-6 rounded-[2.5rem] border border-teal-500/20 space-y-4 shadow-xl">
+             <input type="text" placeholder="Nom de la matière..." value={newSubject.name} onChange={e => setNewSubject({...newSubject, name: e.target.value})} className="w-full bg-slate-900/50 p-4 rounded-xl text-white font-bold outline-none" />
+             <div className="grid grid-cols-2 gap-3">
+                <select value={newSubject.category} onChange={e => setNewSubject({...newSubject, category: e.target.value as any})} className="w-full bg-slate-900/50 p-4 rounded-xl text-[10px] font-black uppercase text-white outline-none">
+                  <option value="GENERAL">Général</option>
+                  <option value="TECHNIQUE">Technique</option>
+                  <option value="PROFESSIONNEL">Professionnel</option>
+                </select>
+                <input type="number" min="1" max="10" value={newSubject.coefficient} onChange={e => setNewSubject({...newSubject, coefficient: parseInt(e.target.value) || 1})} className="w-full bg-slate-900/50 p-4 rounded-xl text-xs font-black text-white outline-none" />
+             </div>
+             <button onClick={handleAddSubject} className="w-full bg-teal-600 hover:bg-teal-700 text-white py-5 rounded-2xl font-black uppercase text-[11px] shadow-lg flex items-center justify-center gap-2">Ajouter Matière</button>
+          </div>
+          <div className="grid grid-cols-1 gap-2 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
+             {subjects.map(subj => (
+               <div key={subj.id} className="glass p-5 rounded-3xl flex items-center justify-between border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-teal-500/10 rounded-xl flex items-center justify-center text-teal-400 font-black text-xs uppercase">{(subj.name || '??').substring(0, 2)}</div>
+                    <div><p className="text-xs font-black uppercase text-slate-700 dark:text-white">{subj.name}</p></div>
+                  </div>
+                  <button onClick={() => { if(window.confirm(`Supprimer ${subj.name} ?`)) db.collection("subjects").doc(subj.id).delete(); }} className="p-2 text-rose-500/30 hover:text-rose-500"><Trash2 size={18} /></button>
+               </div>
+             ))}
+          </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={isInventoryOpen} onClose={() => setIsInventoryOpen(false)} title="Logistique">
         <div className="space-y-6">
           <div className="bg-white/5 p-6 rounded-[2rem] space-y-4">
              <input type="text" placeholder="Matériel..." value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} className="w-full bg-slate-900 p-4 rounded-xl text-white font-bold outline-none" />
              <button onClick={handleAddItem} className="w-full bg-slate-700 text-white py-4 rounded-xl font-black uppercase text-[10px]">Ajouter au stock</button>
           </div>
-          <div className="space-y-3 max-h-[40vh] overflow-y-auto">
+          <div className="space-y-3 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
              {inventory.map(item => (
-               <div key={item.id} className="glass p-5 rounded-3xl flex items-center justify-between">
-                  <div><p className="text-sm font-black uppercase text-white">{item.name}</p><p className="text-[8px] font-bold text-slate-500 uppercase">{item.status}</p></div>
-                  <button onClick={() => db.collection("inventory").doc(item.id).delete()} className="text-rose-500"><Trash2 size={16} /></button>
+               <div key={item.id} className="glass p-5 rounded-3xl flex items-center justify-between border border-black/5 dark:border-white/5">
+                  <div><p className="text-sm font-black uppercase text-slate-700 dark:text-white">{item.name}</p></div>
+                  <button onClick={() => db.collection("inventory").doc(item.id).delete()} className="text-rose-500 hover:text-rose-600 transition-colors"><Trash2 size={16} /></button>
                </div>
              ))}
           </div>
@@ -1033,12 +930,12 @@ Génère un court message de motivation (max 20 mots).`
 
       <Modal isOpen={isExportAbsencesOpen} onClose={() => setIsExportAbsencesOpen(false)} title="Export Rapports">
         <div className="space-y-4">
-           <button onClick={() => generateClassBilanPDF()} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase flex items-center justify-center gap-3"><Printer size={20} /> PDF Global (Toutes Classes)</button>
-           <div className="grid grid-cols-1 gap-2 pt-4">
+           <button onClick={() => generateClassBilanPDF()} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-transform"><Printer size={20} /> PDF Global</button>
+           <div className="grid grid-cols-1 gap-2 pt-4 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
               {classes.map(cls => (
-                <button key={cls.id} onClick={() => generateClassBilanPDF(cls.id)} className="glass p-4 rounded-xl flex items-center justify-between hover:bg-white/5">
-                   <span className="text-[10px] font-black uppercase text-white">{cls.name}</span>
-                   <FileDown size={16} className="text-indigo-400" />
+                <button key={cls.id} onClick={() => generateClassBilanPDF(cls.id)} className="glass p-5 rounded-2xl flex items-center justify-between hover:bg-indigo-600/5 transition-colors group">
+                   <span className="text-xs font-black uppercase text-slate-700 dark:text-white group-hover:text-indigo-600 transition-colors">{cls.name}</span>
+                   <FileDown size={18} className="text-indigo-500" />
                 </button>
               ))}
            </div>
