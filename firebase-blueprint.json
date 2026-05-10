@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Un élève du LTP Fatick",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "firstName": { "type": "string" },
+        "name": { "type": "string" },
+        "matricule": { "type": "string" },
+        "classId": { "type": "string" },
+        "isPresent": { "type": "boolean" },
+        "unjustifiedAbsences": { "type": "number" },
+        "absenceLogs": { "type": "array" },
+        "badges": { "type": "array" },
+        "incidents": { "type": "array" },
+        "emergencyPhone": { "type": "string" },
+        "grades": { "type": "array" }
+      },
+      "required": ["firstName", "name", "matricule", "classId"]
+    },
+    "SchoolClass": {
+      "title": "SchoolClass",
+      "description": "Une classe du lycée",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "level": { "type": "string" },
+        "field": { "type": "string" },
+        "diploma": { "type": "string" }
+      },
+      "required": ["name", "level", "diploma"]
+    },
+    "Staff": {
+      "title": "Staff",
+      "description": "Un membre du personnel (Surveillant, Proviseur, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "PROVISEUR", "DE", "CT", "SG", "SURVEILLANT"] },
+        "matricule": { "type": "string" }
+      },
+      "required": ["name", "role", "matricule"]
+    },
+    "SchoolEvent": {
+      "title": "SchoolEvent",
+      "description": "Une annonce ou un événement sur le fil d'actualité",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "type": { "type": "string" },
+        "likes": { "type": "number" },
+        "comments": { "type": "array" },
+        "isUrgent": { "type": "boolean" }
+      },
+      "required": ["title", "description", "type", "date"]
+    },
+    "InventoryItem": {
+      "title": "InventoryItem",
+      "description": "Matériel des ateliers ou logistique",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string" },
+        "quantity": { "type": "number" }
+      },
+      "required": ["name", "category", "quantity"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message privé entre surveillant et élève",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["conversationId", "senderId", "receiverId", "text"]
+    }
+  },
+  "firestore": {
+    "students": { "schema": "Student", "description": "Liste des élèves" },
+    "classes": { "schema": "SchoolClass", "description": "Liste des classes" },
+    "users": { "schema": "Staff", "description": "Personnel administratif et enseignant" },
+    "events": { "schema": "SchoolEvent", "description": "Actualités du campus" },
+    "inventory": { "schema": "InventoryItem", "description": "Matériel logistique" },
+    "messages": { "schema": "Message", "description": "Messagerie interne" },
+    "teachers": { "schema": "object", "description": "Liste des professeurs" },
+    "subjects": { "schema": "object", "description": "Matières enseignées" }
+  }
+}

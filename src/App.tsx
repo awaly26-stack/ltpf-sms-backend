@@ -131,37 +131,52 @@ const App: React.FC = () => {
   }, [students, selectedClassFilter, searchQuery]);
 
   const handleGenerateAi = async () => {
-    if (isAiLoading) return;
-    setIsAiLoading(true);
-    try {
-      const prompt = `Fais un court résumé motivant de la situation actuelle au Lycée Technique de Fatick en te basant sur ces infos :
-      - Taux de présence moyen : ${studentStats.presenceRate}%
-      - Nombre d'élèves : ${studentStats.totalStudents}
-      - Top élève : ${studentStats.topStudent?.firstName} ${studentStats.topStudent?.name}
-      - Événements récents : ${events.length} annonces.
-      Fais-le en 3 phrases maximum, ton inspirant.`;
+  if (isAiLoading) return;
 
-      const token = await auth.currentUser?.getIdToken();
+  setIsAiLoading(true);
 
-      const response = await fetchWithRetry("/api/ai/summarize", {
+  try {
+    const prompt = `Fais un court résumé motivant de la situation actuelle au Lycée Technique de Fatick en te basant sur ces infos :
+- Taux de présence moyen : ${studentStats.presenceRate}%
+- Nombre d'élèves : ${studentStats.totalStudents}
+- Top élève : ${studentStats.topStudent?.firstName} ${studentStats.topStudent?.name}
+- Événements récents : ${events.length} annonces.
+Fais-le en 3 phrases maximum, ton inspirant.`;
+
+    const token = await auth.currentUser?.getIdToken();
+
+    const response = await fetchWithRetry(
+      `${import.meta.env.VITE_API_URL}/api/ai/summarize`,
+      {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ prompt }),
-      });
+      }
+    );
 
-      if (!response.ok) throw new Error(`Erreur serveur IA: ${response.status}`);
-      const data = await response.json();
-      setAiSummary(data.text || "Erreur de résumé");
-    } catch (e) {
-      console.error("Gemini summary error:", e);
-      setAiSummary("Impossible de générer le résumé pour le moment.");
-    } finally {
-      setIsAiLoading(false);
+    if (!response.ok) {
+      throw new Error(`Erreur serveur IA: ${response.status}`);
     }
-  };
+
+    const data = await response.json();
+
+    const text =
+      typeof data?.text === "string"
+        ? data.text
+        : "Réponse IA invalide";
+
+    setAiSummary(text);
+
+  } catch (e) {
+    console.error("Gemini summary error:", e);
+    setAiSummary("Impossible de générer le résumé pour le moment.");
+  } finally {
+    setIsAiLoading(false);
+  }
+};
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
