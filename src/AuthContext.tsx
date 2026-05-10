@@ -106,16 +106,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       );
 
-      const responseData = await res.json();
-      
-      if (!res.ok) {
-        console.error("Login API error:", responseData.error);
-        return false;
-      }
+     const responseData = await response.json();
 
-      if (responseData.token) {
-        await auth.signInWithCustomToken(responseData.token);
-      }
+if (!response.ok) {
+  console.error("Login API error:", responseData.error);
+  return false;
+}
+
+if (responseData.token) {
+  await auth.signInWithCustomToken(responseData.token);
+}
       
       const user: User = {
         id: responseData.uid,
