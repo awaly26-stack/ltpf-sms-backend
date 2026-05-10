@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Quote, Sparkles, RefreshCw, Loader2, Bot } from 'lucide-react';
-import { auth } from './firebaseConfig';
-import { GoogleGenAI } from "@google/genai";
+import { generateAIQuote } from './utils';
 
 export const AIGeneratedQuote: React.FC = () => {
   const [quote, setQuote] = useState<string | null>(null);
@@ -10,152 +9,41 @@ export const AIGeneratedQuote: React.FC = () => {
   const [error, setError] = useState(false);
 
   const generateQuote = useCallback(async (force = false) => {
-    // =========================
-    // CACHE (24h)
-    // =========================
-    if (!force) {
-      const cachedQuote = localStorage.getItem('school_ai_quote');
-      const cachedAuthor = localStorage.getItem('school_ai_author');
-      const cachedTime = localStorage.getItem('school_ai_quote_time');
-
-      if (cachedQuote && cachedAuthor && cachedTime) {
-        const lastFetch = new Date(cachedTime);
-        const now = new Date();
-        const diffInHours =
-          (now.getTime() - lastFetch.getTime()) / (1000 * 60 * 60);
-
-        if (diffInHours < 24) {
-          setQuote(cachedQuote);
-          setAuthor(cachedAuthor);
-          return;
-        }
-      }
-    }
-
-    // =========================
-    // AUTH (Firebase timing safe)
-    // =========================
-    if (!auth.currentUser) {
-      console.warn("Utilisateur non prêt (Firebase)");
-      return;
-    }
-
     setIsLoading(true);
     setError(false);
 
     try {
-      // =========================
-      // PROMPT
-      // =========================
-      const prompt = `
-Donne une citation inspirante pour des élèves.
-Réponds uniquement en JSON :
-{
-  "citation": "...",
-  "auteur": "..."
-}
-`;
+      // CACHE
+      if (!force) {
+        const cachedQuote = localStorage.getItem('school_ai_quote');
+        const cachedAuthor = localStorage.getItem('school_ai_author');
+        const cachedTime = localStorage.getItem('school_ai_quote_time');
 
-      const token = await auth.currentUser.getIdToken();
+        if (cachedQuote && cachedAuthor && cachedTime) {
+          const diff = (Date.now() - new Date(cachedTime).getTime()) / 3600000;
 
-      // =========================
-      // API CALL
-      // =========================
- const generateQuote = useCallback(async (force = false) => {
-  setIsLoading(true);
-  setError(false);
+          if (diff < 24) {
+            setQuote(cachedQuote);
+            setAuthor(cachedAuthor);
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
 
-  try {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      // AI CALL (UTILS)
+      const data = await generateAIQuote();
 
-    if (!apiKey) throw new Error("Missing API key");
+      setQuote(data.citation);
+      setAuthor(data.auteur);
 
-    const ai = new GoogleGenAI({ apiKey });
-
-    const prompt = `
-Donne une citation inspirante pour des élèves du Sénégal.
-Réponds uniquement en JSON :
-{"citation":"...","auteur":"..."}
-`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
-      contents: prompt,
-    });
-
-    // =========================
-    // EXTRACTION SAFE TEXTE
-    // =========================
-    const text =
-      response.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-    // =========================
-    // PARSING SAFE JSON
-    // =========================
-    let parsed = { citation: "", auteur: "" };
-
-    try {
-      parsed = JSON.parse(text);
-    } catch (e) {
-      console.warn("Réponse IA non JSON:", text);
-    }
-
-    setQuote(parsed.citation || "Erreur de génération");
-    setAuthor(parsed.auteur || "Inconnu");
-
-  } catch (err) {
-    console.error("AI error:", err);
-    setError(true);
-  } finally {
-    setIsLoading(false);
-  }
-}, []);
-
-      const newQuote =
-        parsed.citation ||
-        "L'excellence est le résultat de la rigueur et de la passion.";
-
-      const newAuthor =
-        parsed.auteur || "L'Esprit de Fatick";
-
-      setQuote(newQuote);
-      setAuthor(newAuthor);
-
-      // =========================
-      // CACHE SAVE
-      // =========================
-      localStorage.setItem('school_ai_quote', newQuote);
-      localStorage.setItem('school_ai_author', newAuthor);
+      localStorage.setItem('school_ai_quote', data.citation);
+      localStorage.setItem('school_ai_author', data.auteur);
       localStorage.setItem('school_ai_quote_time', new Date().toISOString());
 
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-
-      const isQuotaError =
-        errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED');
-
-      if (!isQuotaError) {
-        console.error("Erreur génération citation:", err);
-      }
-
+      console.error(err);
       setError(true);
-
-      const fallbackQuote =
-        "Le succès n'est pas final, l'échec n'est pas fatal : c'est le courage de continuer qui compte.";
-
-      const fallbackAuthor =
-        "Winston Churchill";
-
-      setQuote(fallbackQuote);
-      setAuthor(fallbackAuthor);
-
-      // Cache fallback si quota atteint
-      if (isQuotaError) {
-        localStorage.setItem('school_ai_quote', fallbackQuote);
-        localStorage.setItem('school_ai_author', fallbackAuthor);
-        localStorage.setItem('school_ai_quote_time', new Date().toISOString());
-      }
-
     } finally {
       setIsLoading(false);
     }
@@ -165,9 +53,10 @@ Réponds uniquement en JSON :
     generateQuote();
   }, [generateQuote]);
 
+  // ✅ IMPORTANT : return UNIQUE (PROPRE)
   return (
     <div className="glass rounded-[2.5rem] p-8 border border-indigo-500/20 shadow-xl relative overflow-hidden group">
-      
+
       {/* Glow effect */}
       <div className="absolute -left-10 -top-10 w-32 h-32 bg-indigo-600/10 rounded-full blur-3xl group-hover:bg-indigo-600/20 transition-all duration-700" />
 
@@ -188,7 +77,6 @@ Réponds uniquement en JSON :
           onClick={() => generateQuote(true)}
           disabled={isLoading}
           className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-white/5 rounded-xl transition-all disabled:opacity-30"
-          title="Nouvelle citation"
         >
           <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
         </button>
@@ -200,7 +88,7 @@ Réponds uniquement en JSON :
           <div className="py-6 flex flex-col items-center justify-center gap-3">
             <Loader2 size={24} className="animate-spin text-indigo-500/50" />
             <p className="text-[9px] font-black uppercase text-slate-500 animate-pulse">
-              Consultation de l'Oracle...
+              Consultation IA...
             </p>
           </div>
         ) : (

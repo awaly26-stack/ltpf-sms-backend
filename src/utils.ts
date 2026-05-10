@@ -1,4 +1,48 @@
 import { auth } from "./firebaseConfig";
+import { GoogleGenAI } from "@google/genai";
+
+type QuoteResponse = {
+  citation: string;
+  auteur: string;
+};
+
+export const generateAIQuote = async (): Promise<QuoteResponse> => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Missing Gemini API key");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `
+Donne une citation inspirante pour des élèves du Sénégal.
+Réponds uniquement en JSON :
+{"citation":"...","auteur":"..."}
+`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-1.5-flash",
+    contents: prompt,
+  });
+
+  // extraction robuste (compatible build/minify)
+  const text =
+    response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+  let parsed: QuoteResponse;
+
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = {
+      citation: "L'excellence est une habitude.",
+      auteur: "EduTechPro AI",
+    };
+  }
+
+  return parsed;
+};
 
 /**
  * Génère un matricule unique pour le LTP Fatick
