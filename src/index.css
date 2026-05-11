@@ -3,40 +3,63 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Fonts */
 :root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --brand: #4f46e5;
+  --brand-light: #818cf8;
+  --brand-dark: #3730a3;
+
   --sat: env(safe-area-inset-top);
   --sar: env(safe-area-inset-right);
   --sab: env(safe-area-inset-bottom);
   --sal: env(safe-area-inset-left);
 }
 
+/* Base layout */
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  color: #0f172a;
+
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
-  /* Empêche le défilement élastique (rubber-banding) sur iOS */
+
   position: fixed;
   width: 100%;
   height: 100%;
   overflow: hidden;
+
   margin: 0;
   padding: 0;
-  margin: 0;
 }
 
+/* Dark mode global */
+.dark body {
+  background-color: #020617;
+  color: #f1f5f9;
+}
+
+/* App root */
 #root {
   height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
+
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Animations de transition globales */
+/* Smooth transitions */
 * {
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
-/* Scrollbars stylisées pour mobile et desktop */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
 }
@@ -54,7 +77,7 @@ body {
   background: rgba(71, 85, 105, 0.4);
 }
 
-/* Utilitaires de masquage de scrollbar */
+/* Hide scrollbar */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -64,37 +87,65 @@ body {
   scrollbar-width: none;
 }
 
-/* Optimisation de l'affichage des images */
+/* Images */
 img {
   -webkit-user-drag: none;
   user-select: none;
 }
 
-/* Styles spécifiques à l'impression pour les badges */
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dark .glass {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Mesh background (SaaS style) */
+.mesh-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+
+  background:
+    radial-gradient(circle at 100% 0%, rgba(79, 70, 229, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 0% 100%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+}
+
+.dark .mesh-bg {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(79, 70, 229, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+}
+
+/* Print mode */
 @media print {
   body * {
     visibility: hidden !important;
   }
-  #printable-badge, #printable-badge * {
+
+  #printable-badge,
+  #printable-badge * {
     visibility: visible !important;
   }
+
   #printable-badge {
     position: fixed;
-    left: 0;
-    top: 0;
-    width: 100vw;
-    height: 100vh;
+    inset: 0;
     display: flex !important;
     align-items: center;
     justify-content: center;
     background: white !important;
-    margin: 0;
-    padding: 0;
     z-index: 9999;
   }
 }
 
-/* Ajustements pour les écrans tactiles */
+/* Touch animation */
 @media (hover: none) {
   .active-scale:active {
     transform: scale(0.95);
