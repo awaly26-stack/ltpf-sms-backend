@@ -610,9 +610,18 @@ const App: React.FC = () => {
   if (!currentUser) return <Login />;
 
   return (
-     <div className="h-full w-full flex flex-col bg-[#f8fafc] dark:bg-[#020617] overflow-hidden transition-colors duration-500">
-      
-      <Header theme={theme} toggleTheme={toggleTheme} />
+  <div className="relative h-full w-full flex flex-col bg-[#f5f5f0] dark:bg-[#1e1e1b] overflow-hidden transition-colors duration-500">
+  
+  <div className="absolute inset-0 mesh-bg opacity-40 dark:opacity-70"></div>
+
+  <div className="relative z-10 flex flex-col h-full">
+    
+    <Header theme={theme} toggleTheme={toggleTheme} />
+
+    {/* contenu */}
+
+  </div>
+
 
       <main className="flex-1 overflow-y-auto px-6 pb-32">
         {activeTab === 'home' && <HomeView events={events} students={students} classes={classes} studentStats={studentStats}   onNavigateToAdmin={() => setActiveTab('admin')} onOpenStudentProfile={setSelectedStudentId} onUpdateStudent={handleUpdateStudent} onLikeEvent={handleLikeEvent} onOpenComments={setSelectedEventForComments} />}
