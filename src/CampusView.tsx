@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Search, ChevronRight, Users, ShieldCheck, GraduationCap, User,  ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
 import { Student, SchoolClass, User as AppUser, Teacher } from './types';
+import { useAuth } from './AuthContext';
 
 interface CampusViewProps {
   students: Student[];
@@ -15,15 +16,15 @@ interface CampusViewProps {
   onSelectStudent: (id: string) => void;
   onSelectTeacher: (id: string) => void;
   onSelectStaff: (id: string) => void;
-  isStaff: boolean;
   onPresenceChange?: (student: Student, isPresent: boolean) => void;
 }
 
 type CampusCategory = 'students' | 'teachers' | 'staff';
 
 export const CampusView: React.FC<CampusViewProps> = ({
-  students, teachers, classes, allStaff, searchQuery, setSearchQuery, selectedClassFilter, setSelectedClassFilter, onSelectStudent, onSelectTeacher, onSelectStaff, isStaff,  onPresenceChange
+  students, teachers, classes, allStaff, searchQuery, setSearchQuery, selectedClassFilter, setSelectedClassFilter, onSelectStudent, onSelectTeacher, onSelectStaff,   onPresenceChange
 }) => {
+  const { isStaff } = useAuth();
   const [activeCategory, setActiveCategory] = useState<CampusCategory>('students');
    const [isSurveillanceMode, setIsSurveillanceMode] = useState(false);
 

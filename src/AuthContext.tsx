@@ -36,25 +36,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Ping backend to check if it's awake
-  useEffect(() => {
-    let interval: any;
-    const ping = async () => {
-      try {
-        const resp = await fetch("/api/health");
-        if (resp.ok) {
-          setBackendAwake(true);
-          clearInterval(interval);
-        }
-      } catch (e) {
-        console.warn("Backend still sleeping...");
+ // Ping backend to check if it's awake
+useEffect(() => {
+  let interval: any;
+
+  const ping = async () => {
+    try {
+      const resp = await fetchWithRetry(
+  `${import.meta.env.VITE_API_URL}/api/health`
+);
+      
+
+      if (resp.ok) {
+        setBackendAwake(true);
+        clearInterval(interval);
       }
-    };
-    
-    ping();
-    interval = setInterval(ping, 5000); // Retry every 5s
-    return () => clearInterval(interval);
-  }, []);
+    } catch (e) {
+      console.warn("Backend still sleeping...");
+    }
+  };
+
+  ping();
+
+  interval = setInterval(ping, 5000);
+
+  return () => clearInterval(interval);
+}, []);
 
   // Initialize Auth
   useEffect(() => {
