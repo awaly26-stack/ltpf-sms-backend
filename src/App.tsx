@@ -391,7 +391,7 @@ const App: React.FC = () => {
     doc.save(fileName);
   };
 
-  const generateWeeklyTeachersBilanPDF = () => {
+ const generateWeeklyTeachersBilanPDF = () => {
     const doc = new jsPDF({ orientation: 'l' });
     let y = 20;
 
@@ -444,8 +444,10 @@ const App: React.FC = () => {
 
       if (weeklyLogs.length > 0) {
         const teacherSubjects = t.subjectIds.map(id => subjects.find(s => s.id === id)?.name).filter(Boolean).join(", ");
+        let teacherTotal = 0;
         
         weeklyLogs.forEach(l => {
+          teacherTotal += l.hours;
           const className = classes.find(c => c.id === l.classId)?.name || "N/A";
           const dateStr = new Date(l.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
           
@@ -459,6 +461,15 @@ const App: React.FC = () => {
           y += 10; // Plus d'espace pour le maxWidth
           if (y > 185) { doc.addPage(); y = 20; }
         });
+
+        // Ligne de total par professeur
+        doc.setFont("helvetica", "bold").setFontSize(9);
+        doc.text(`TOTAL ${t.name.toUpperCase()} :`, 205, y);
+        doc.text(`${teacherTotal}H`, 270, y, { align: 'right' });
+        y += 10;
+        doc.line(205, y - 8, 277, y - 8);
+        if (y > 185) { doc.addPage(); y = 20; }
+        doc.setFont("helvetica", "normal");
       }
     });
 
@@ -514,8 +525,10 @@ const App: React.FC = () => {
       if (activeLogs.length > 0) {
         // Group by date
         const groupedLogs: Record<string, { date: string, classes: Set<string>, motifs: Set<string>, totalHours: number }> = {};
+        let teacherTotal = 0;
 
         activeLogs.forEach(l => {
+          teacherTotal += l.hours;
           const d = new Date(l.date);
           const dateKey = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
           const className = classes.find(c => c.id === l.classId)?.name || "N/A";
@@ -538,6 +551,15 @@ const App: React.FC = () => {
           y += 7;
           if (y > 275) { doc.addPage(); y = 20; }
         });
+
+        // Ligne de total par professeur
+        doc.setFont("helvetica", "bold").setFontSize(9);
+        doc.text(`TOTAL ${t.name.toUpperCase()} :`, 150, y);
+        doc.text(`${teacherTotal}H`, 185, y, { align: 'right' });
+        y += 10;
+        doc.line(150, y - 8, 190, y - 8);
+        if (y > 275) { doc.addPage(); y = 20; }
+        doc.setFont("helvetica", "normal");
       }
     });
 
@@ -588,7 +610,8 @@ const App: React.FC = () => {
   if (!currentUser) return <Login />;
 
   return (
-    <div className="h-full w-full flex flex-col bg-slate-950 overflow-hidden transition-colors duration-300">
+     <div className="h-full w-full flex flex-col bg-[#f8fafc] dark:bg-[#020617] overflow-hidden transition-colors duration-500">
+      <div className="mesh-bg opacity-50 dark:opacity-100"></div>
       <Header theme={theme} toggleTheme={toggleTheme} />
 
       <main className="flex-1 overflow-y-auto px-6 pb-32">
