@@ -66,6 +66,7 @@ const App: React.FC = () => {
   const [isManageSubjectsOpen, setIsManageSubjectsOpen] = useState(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isExportAbsencesOpen, setIsExportAbsencesOpen] = useState(false);
+  const [isAppLoading, setIsAppLoading] = useState(false);
 
   // Form States
   const [newStaff, setNewStaff] = useState<{firstName: string, name: string, role: Role, matricule?: string}>({ firstName: '', name: '', role: 'SURVEILLANT' });
@@ -81,9 +82,7 @@ const App: React.FC = () => {
   const [newEvent, setNewEvent] = useState<Partial<SchoolEvent>>({ title: '', description: '', type: 'SURVEILLANT_GEN', isUrgent: false });
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({ name: '', category: 'Atelier', status: 'opérationnel', quantity: 1 });
 
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-
+ 
   const studentStats = useMemo(() => {
     const total = students.length || 1;
     const presentCount = students.filter(s => s.isPresent).length;
@@ -130,53 +129,6 @@ const App: React.FC = () => {
     return res;
   }, [students, selectedClassFilter, searchQuery]);
 
-  const handleGenerateAi = async () => {
-  if (isAiLoading) return;
-
-  setIsAiLoading(true);
-
-  try {
-    const prompt = `Fais un court résumé motivant de la situation actuelle au Lycée Technique de Fatick en te basant sur ces infos :
-- Taux de présence moyen : ${studentStats.presenceRate}%
-- Nombre d'élèves : ${studentStats.totalStudents}
-- Top élève : ${studentStats.topStudent?.firstName} ${studentStats.topStudent?.name}
-- Événements récents : ${events.length} annonces.
-Fais-le en 3 phrases maximum, ton inspirant.`;
-
-    const token = await auth.currentUser?.getIdToken();
-
-    const response = await fetchWithRetry(
-      `${import.meta.env.VITE_API_URL}/api/ai/summarize`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ prompt }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Erreur serveur IA: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    const text =
-      typeof data?.text === "string"
-        ? data.text
-        : "Réponse IA invalide";
-
-    setAiSummary(text);
-
-  } catch (e) {
-    console.error("Gemini summary error:", e);
-    setAiSummary("Impossible de générer le résumé pour le moment.");
-  } finally {
-    setIsAiLoading(false);
-  }
-};
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -281,7 +233,7 @@ Fais-le en 3 phrases maximum, ton inspirant.`;
       alert("Titre et description requis.");
       return;
     }
-    setLoading(true);
+    setIsAppLoading(true);
     try {
       await db.collection("events").add(toPlainObject({
         ...newEvent,
@@ -292,25 +244,25 @@ Fais-le en 3 phrases maximum, ton inspirant.`;
       }));
       setIsAddEventOpen(false);
       setNewEvent({ title: '', description: '', type: 'SURVEILLANT_GEN', isUrgent: false });
-    } catch (e) { alert("Erreur lors de la publication."); } finally { setLoading(false); }
+    } catch (e) { alert("Erreur lors de la publication."); } finally { setIsAppLoading(false); }
   };
 
   const handleUpdateEvent = async () => {
     if (!editingEvent || !editingEvent.title || !editingEvent.description) return;
-    setLoading(true);
+    setIsAppLoading(true);
     try {
       const {id, ...data} = toPlainObject(editingEvent);
       await db.collection("events").doc(id).update(data);
       setEditingEvent(null);
-    } catch (e) { alert("Erreur lors de la mise à jour."); } finally { setLoading(false); }
+    } catch (e) { alert("Erreur lors de la mise à jour."); } finally { setIsAppLoading(false); }
   };
 
   const handleDeleteEvent = async (id: string) => {
     if (!window.confirm("Supprimer définitivement cette actualité ?")) return;
-    setLoading(true);
+    setIsAppLoading(true);
     try {
       await db.collection("events").doc(id).delete();
-    } catch (e) { alert("Erreur lors de la suppression."); } finally { setLoading(false); }
+    } catch (e) { alert("Erreur lors de la suppression."); } finally { setIsAppLoading(false); }
   };
 
   const handleAddStaff = async () => {
@@ -600,7 +552,7 @@ Fais-le en 3 phrases maximum, ton inspirant.`;
 
   const handleResetAllAbsences = async () => {
     if (!window.confirm("Remettre les compteurs des élèves à zéro ?")) return;
-    setLoading(true);
+    setIsAppLoading(true);
     try {
       const batch = db.batch();
       students.forEach(s => {
@@ -608,12 +560,12 @@ Fais-le en 3 phrases maximum, ton inspirant.`;
         batch.update(studentRef, { absenceLogs: (s.absenceLogs || []).map(l => ({...l, isExported: true})), unjustifiedAbsences: 0 });
       });
       await batch.commit();
-    } catch (e) { alert("Erreur."); } finally { setLoading(false); }
+    } catch (e) { alert("Erreur."); } finally { setIsAppLoading(false); }
   };
 
   const handleResetTeacherAbsences = async () => {
     if (!window.confirm("Remettre les compteurs des professeurs à zéro ?")) return;
-    setLoading(true);
+    setIsAppLoading(true);
     try {
       const batch = db.batch();
       teachers.forEach(t => {
@@ -623,11 +575,11 @@ Fais-le en 3 phrases maximum, ton inspirant.`;
         });
       });
       await batch.commit();
-    } catch (e) { alert("Erreur."); } finally { setLoading(false); }
+    } catch (e) { alert("Erreur."); } finally { setIsAppLoading(false); }
   };
 
 
-  if (loading || !isAuthReady) return (
+  if (loading || isAppLoading || !isAuthReady) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 text-indigo-500">
       <Loader2 className="animate-spin" size={48} />
     </div>
@@ -640,7 +592,7 @@ Fais-le en 3 phrases maximum, ton inspirant.`;
       <Header theme={theme} toggleTheme={toggleTheme} />
 
       <main className="flex-1 overflow-y-auto px-6 pb-32">
-        {activeTab === 'home' && <HomeView events={events} students={students} classes={classes} studentStats={studentStats} aiSummary={aiSummary} isAiLoading={isAiLoading} onGenerateAi={handleGenerateAi} onNavigateToAdmin={() => setActiveTab('admin')} onOpenStudentProfile={setSelectedStudentId} onUpdateStudent={handleUpdateStudent} onLikeEvent={handleLikeEvent} onOpenComments={setSelectedEventForComments} />}
+        {activeTab === 'home' && <HomeView events={events} students={students} classes={classes} studentStats={studentStats}   onNavigateToAdmin={() => setActiveTab('admin')} onOpenStudentProfile={setSelectedStudentId} onUpdateStudent={handleUpdateStudent} onLikeEvent={handleLikeEvent} onOpenComments={setSelectedEventForComments} />}
         {activeTab === 'list' && <CampusView students={filteredStudents} teachers={teachers} classes={classes} allStaff={allStaff} searchQuery={searchQuery} setSearchQuery={setSearchQuery} selectedClassFilter={selectedClassFilter} setSelectedClassFilter={setSelectedClassFilter} onSelectStudent={setSelectedStudentId} onSelectTeacher={setSelectedTeacherId} onSelectStaff={setSelectedStaffId} onPresenceChange={handlePresence} />}
         {activeTab === 'admin' && isStaff && <AdminView allStaff={allStaff} students={students} teachers={teachers} onSelectStaff={setSelectedStaffId} onOpenAddStaff={() => setIsAddStaffOpen(true)} onOpenAddStudent={() => setIsAddStudentOpen(true)} onOpenAddTeacher={() => setIsAddTeacherOpen(true)} onOpenAddEvent={() => setIsAddEventOpen(true)} onOpenManageEvents={() => setIsManageEventsOpen(true)} onOpenManageClasses={() => setIsManageClassesOpen(true)} onOpenManageSubjects={() => setIsManageSubjectsOpen(true)} onOpenInventory={() => setIsInventoryOpen(true)} onOpenExportAbsences={() => setIsExportAbsencesOpen(true)} onOpenExportTeacherAbsences={generateTeachersBilanPDF} onOpenExportWeeklyTeacherAbsences={generateWeeklyTeachersBilanPDF} onOpenManageStaff={() => setIsManageStaffOpen(true)} onOpenManageTeachers={() => setIsManageTeachersOpen(true)} onResetCounters={handleResetAllAbsences} onResetTeacherCounters={handleResetTeacherAbsences} />}
         {activeTab === 'chat' && <Messaging currentUser={currentUser} students={students} targetStudentId={chatWithStudentId} onClose={() => setActiveTab('home')} />}

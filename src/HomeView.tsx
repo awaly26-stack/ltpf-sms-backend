@@ -4,6 +4,8 @@ import { Landmark, Star, Award, UserCheck, Wrench, Flame, Loader2, Sparkles, Shi
 import { SchoolEvent, Student, EventType, SchoolClass } from './types';
 import  ClassLeaderboard  from './ClassLeaderboard';
 import  WeeklyChallenge  from './WeeklyChallenge';
+import { CampusQuote } from './CampusQuote';
+import { useAuth } from './AuthContext';
 
 
 const EVENT_TYPE_LABELS: Record<EventType, { label: string, icon: any, color: string }> = {
@@ -22,12 +24,7 @@ interface HomeViewProps {
   students: Student[];
   classes: SchoolClass[];
   studentStats: { presenceRate: number; totalStudents: number; topStudent: Student | null };
-  aiSummary: string | null;
-  isAiLoading: boolean;
-  onGenerateAi: () => void;
-  isStaff: boolean;
   onNavigateToAdmin: () => void;
-  currentStudent?: Student | null;
   onOpenStudentProfile?: (id: string) => void;
   onUpdateStudent?: (updated: Student) => void;
   onLikeEvent: (eventId: string, currentLikes: number) => void;
@@ -35,10 +32,12 @@ interface HomeViewProps {
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({ 
-  events, students, classes, studentStats, aiSummary, isAiLoading, onGenerateAi, isStaff, onNavigateToAdmin, currentStudent, onOpenStudentProfile, onUpdateStudent, onLikeEvent, onOpenComments
+  events, students, classes, studentStats,  onNavigateToAdmin,  onOpenStudentProfile, onUpdateStudent, onLikeEvent, onOpenComments
 }) => {
+  const { currentUser, isStaff } = useAuth();
   const topStudent = studentStats.topStudent;
   const topStudentClass = classes.find(c => c.id === topStudent?.classId);
+  const currentStudent = students.find(s => s.id === currentUser?.id);
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500">
@@ -68,7 +67,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </section>
 
         {/* Citation générée par l'IA */}
-        <AIGeneratedQuote />
+        <CampusQuote />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -136,13 +135,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <section className="space-y-6">
         <div className="flex items-center justify-between px-2">
           <h4 className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-2"><Flame size={16} className="text-orange-500" /> Fil d'Activité</h4>
-          <button onClick={onGenerateAi} disabled={isAiLoading} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase flex items-center gap-2 shadow-lg disabled:opacity-50">
-            {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} IA Assistant
-          </button>
+          
         </div>
-
-        {aiSummary && <div className="glass rounded-3xl p-6 bg-indigo-500/5 border-indigo-500/20 text-xs italic text-slate-600 dark:text-slate-300">"{aiSummary}"</div>}
-        <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 gap-6">
           {events.length > 0 ? events.map(ev => {
             const LabelConfig = EVENT_TYPE_LABELS[ev.type] || EVENT_TYPE_LABELS['PROVISEUR'];
             return (

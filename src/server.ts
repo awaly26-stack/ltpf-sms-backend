@@ -88,37 +88,7 @@ apiRouter.get("/health", (req, res) => {
 });
 
 // =========================
-// AI SUMMARIZE
-// =========================
-apiRouter.post("/ai/summarize", verifyFirebaseToken, async (req: any, res: any) => {
-  const { prompt } = req.body;
-  const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
-    return res.status(500).json({ error: "Gemini API key not configured" });
-  }
-
-  if (!prompt) {
-    return res.status(400).json({ error: "Prompt required" });
-  }
-
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-
-const result = await ai.models.generateContent({
-  model: "gemini-1.5-flash",
-  contents: prompt,
-});
-
-const text =
-  result.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
-    res.json({ text });
-  } catch (error: any) {
-    console.error("AI Summarize error:", error);
-    res.status(500).json({ error: "AI generation failed", details: error.message });
-  }
-});
 
 // =========================
 // SUPER ADMIN

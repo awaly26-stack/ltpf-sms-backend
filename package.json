@@ -10,8 +10,6 @@
   "start": "node dist/server.js"
   },
   "dependencies": {
-    "@google/genai": "^1.35.0",
-    "@google/generative-ai": "^0.24.1",
     "@tailwindcss/postcss": "^4.1.18",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
