@@ -611,7 +611,7 @@ const App: React.FC = () => {
 
   return (
      <div className="h-full w-full flex flex-col bg-[#f8fafc] dark:bg-[#020617] overflow-hidden transition-colors duration-500">
-      <div className="mesh-bg opacity-50 dark:opacity-100"></div>
+      
       <Header theme={theme} toggleTheme={toggleTheme} />
 
       <main className="flex-1 overflow-y-auto px-6 pb-32">
