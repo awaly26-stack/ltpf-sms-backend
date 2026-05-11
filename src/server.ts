@@ -314,7 +314,7 @@ async function getOrangeToken(): Promise<string | null> {
 apiRouter.post("/orange/sms", verifyFirebaseToken, async (req: any, res: any) => {
   const user = req.user;
 
-  if (!user.permissions?.includes("SMS")) {
+  if (!user.permissions?.includes("SMS") && !user.permissions?.includes("ALL")) {
     return res.status(403).json({ error: "Not allowed" });
   }
   const { to, message } = req.body || {};

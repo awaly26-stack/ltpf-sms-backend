@@ -7,6 +7,7 @@ import {
   PieChart, BarChart3, TrendingUp, Clock, AlertCircle, RotateCcw, UserMinus, BookOpen, Megaphone, Settings
 } from 'lucide-react';
 import { User, Role, Student, Teacher, AbsenceMotif } from './types';
+import { useAuth } from './AuthContext';
 
 interface AdminViewProps {
   isSuperAdmin: boolean;
@@ -41,11 +42,9 @@ const ROLE_CONFIG: Record<string, { label: string, icon: any, color: string }> =
 };
 
 export const AdminView: React.FC<AdminViewProps> = ({
-  isSuperAdmin, allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters
+   allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters
 }) => {
-  const canManageStaff = useMemo(() => {
-    return isSuperAdmin || allStaff.some(s => ['PROVISEUR', 'DE', 'CT', 'SG'].includes(s.role));
-  }, [isSuperAdmin, allStaff]);
+  const { isSuperAdmin } = useAuth();
 
   const topManagement = useMemo(() => {
     const roles = ['ADMIN', 'PROVISEUR', 'DE', 'CT', 'SG'];
