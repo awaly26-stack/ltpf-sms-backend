@@ -42,30 +42,30 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const topStudentClass = classes.find(c => c.id === topStudent?.classId);
   const currentStudent = students.find(s => s.id === currentUser?.id);
 
-   const combinedFeed = React.useMemo(() => {
-    const newsFromMedia = mediaFiles
-      .filter(m => m.category === 'ACTUALITE')
-      .map(m => ({
-        id: m.id,
-        title: m.name,
-        description: m.description || "",
-        date: m.date,
-        type: 'MEDIA_NEWS' as const,
-        mediaUrl: m.url,
-        mediaType: m.type,
-        senderName: m.senderName,
-        isMedia: true
-      }));
-
-    const standardEvents = events.map(e => ({
-      ...e,
-      isMedia: false
+  const combinedFeed = React.useMemo(() => {
+  const newsFromMedia = mediaFiles
+    .filter(m => m.category === 'ACTUALITE')
+    .map(m => ({
+      id: m.id,
+      title: m.name,
+      description: m.description || "",
+      date: m.date,
+      type: 'MEDIA_NEWS' as const,
+      mediaUrl: m.url,
+      mediaType: m.type,
+      senderName: m.senderName,
+      isMedia: true
     }));
 
-    return [...newsFromMedia, ...standardEvents].sort((a,b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-  }, [events, mediaFiles]);
+  const standardEvents = events.map(e => ({
+    ...e,
+    isMedia: false
+  }));
+
+  return [...newsFromMedia, ...standardEvents].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+}, [events, mediaFiles]);
 
 
   return (
@@ -185,68 +185,130 @@ export const HomeView: React.FC<HomeViewProps> = ({
           
         </div>
             <div className="grid grid-cols-1 gap-6">
-          {events.length > 0 ? events.map(ev => {
-            const LabelConfig = EVENT_TYPE_LABELS[ev.type] || EVENT_TYPE_LABELS['PROVISEUR'];
-            return (
-              <div key={item.id} className={`glass p-8 rounded-3xl space-y-4 shadow-lg border border-black/5 dark:border-white/5 hover:scale-[1.01] transition-all bg-white dark:bg-[#0f172a]/60 ${(!isMediaItem && (item as SchoolEvent).isUrgent) ? 'border-rose-500/30 ring-1 ring-rose-500/5' : ''}`}>
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-md ${LabelConfig.color}`}>
-                      <LabelConfig.icon size={18} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase text-slate-800 dark:text-white leading-none font-display">{isMediaItem ? item.senderName : LabelConfig.label}</p>
-                      <span className="text-[9px] font-medium text-slate-400 uppercase tracking-tighter">{new Date(item.date).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                  {!isMediaItem && (item as SchoolEvent).isUrgent && <span className="px-3 py-1 bg-rose-600 text-white rounded-full text-[8px] font-bold uppercase animate-pulse">Urgent</span>}
-                  {isMediaItem && <span className="px-3 py-1 bg-orange-500/10 text-orange-500 rounded-full text-[8px] font-black uppercase tracking-widest border border-orange-500/20">INFO</span>}
-                </div>
-                
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight font-display lowercase first-letter:uppercase">{item.title}</h3>
-                <p className="text-[13px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{item.description}</p>
-                
-                {isMediaItem && item.mediaUrl && item.mediaType === 'IMAGE' && (
-                  <div className="rounded-2xl overflow-hidden border border-black/5 dark:border-white/5 shadow-xl max-h-[400px]">
-                    <img src={item.mediaUrl} alt={item.title} className="w-full h-full object-contain bg-slate-100 dark:bg-slate-900" />
-                  </div>
-                )}
+  {combinedFeed.length > 0 ? combinedFeed.map((item) => {
 
-                {!isMediaItem ? (
-                  <div className="flex items-center gap-6 pt-4 border-t border-black/5 dark:border-white/5 mt-auto">
-                    <button 
-                      onClick={() => onLikeEvent(item.id, (item as SchoolEvent).likes || 0)}
-                      className="flex items-center gap-2 group/like transition-all active:scale-90"
-                    >
-                      <Heart size={16} className={`transition-all ${(item as SchoolEvent).likes && (item as SchoolEvent).likes > 0 ? 'text-rose-500 fill-rose-500' : 'text-slate-500 group-hover/like:text-rose-500'}`} />
-                      <span className="text-[10px] font-black text-slate-500 group-hover/like:text-white">{(item as SchoolEvent).likes || 0}</span>
-                    </button>
-                    <button
+  const isMediaItem = item.isMedia === true;
 
-                   onClick={() => onOpenComments(item as SchoolEvent)}
-                      className="flex items-center gap-2 group/comment transition-all active:scale-90"
-                    >
-                      <MessageSquare size={16} className="text-slate-500 group-hover/comment:text-indigo-400 group-hover/comment:fill-indigo-400/20 transition-all" />
-                      <span className="text-[10px] font-black text-slate-500 group-hover/comment:text-white">{(item as SchoolEvent).comments?.length || 0}</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="pt-4 border-t border-black/5 dark:border-white/5 mt-auto flex justify-end">
-                    <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase text-indigo-500 tracking-widest hover:underline">
-                      Ouvrir le document
-                    </a>
-                  </div>
-                )}
-              </div>
-            );
-          }) : (
-            <div className="py-12 text-center opacity-30">
-               <Flame size={40} className="mx-auto mb-3" />
-               <p className="text-[10px] font-black uppercase">Aucune actualité récente</p>
-            </div>
-          )}
+  const eventType = (item as any).type as EventType;
+
+  const LabelConfig =
+    EVENT_TYPE_LABELS[eventType] || EVENT_TYPE_LABELS['PROVISEUR'];
+
+  return (
+    <div
+      key={item.id}
+      className={`glass p-8 rounded-3xl space-y-4 shadow-lg border border-black/5 dark:border-white/5 hover:scale-[1.01] transition-all bg-white dark:bg-[#0f172a]/60 ${
+        (!isMediaItem && (item as SchoolEvent).isUrgent)
+          ? 'border-rose-500/30 ring-1 ring-rose-500/5'
+          : ''
+      }`}
+    >
+
+      {/* HEADER */}
+      <div className="flex justify-between items-start">
+        <div className="flex items-center gap-3">
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-md ${LabelConfig.color}`}>
+            <LabelConfig.icon size={18} />
+          </div>
+
+          <div>
+            <p className="text-[10px] font-bold uppercase text-slate-800 dark:text-white leading-none font-display">
+              {isMediaItem ? (item as any).senderName || "INFO" : LabelConfig.label}
+            </p>
+
+            <span className="text-[9px] font-medium text-slate-400 uppercase tracking-tighter">
+              {new Date(item.date).toLocaleDateString()}
+            </span>
+          </div>
         </div>
-      </section>
+
+        {!isMediaItem && (item as SchoolEvent).isUrgent && (
+          <span className="px-3 py-1 bg-rose-600 text-white rounded-full text-[8px] font-bold uppercase animate-pulse">
+            Urgent
+          </span>
+        )}
+
+        {isMediaItem && (
+          <span className="px-3 py-1 bg-orange-500/10 text-orange-500 rounded-full text-[8px] font-black uppercase tracking-widest border border-orange-500/20">
+            INFO
+          </span>
+        )}
+      </div>
+
+      {/* CONTENT */}
+      <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight font-display lowercase first-letter:uppercase">
+        {item.title}
+      </h3>
+
+      <p className="text-[13px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+        {item.description}
+      </p>
+
+      {/* MEDIA */}
+      {isMediaItem && (item as any).mediaUrl && (item as any).mediaType === 'IMAGE' && (
+        <div className="rounded-2xl overflow-hidden border border-black/5 dark:border-white/5 shadow-xl max-h-[400px]">
+          <img
+            src={(item as any).mediaUrl}
+            alt={item.title}
+            className="w-full h-full object-contain bg-slate-100 dark:bg-slate-900"
+          />
+        </div>
+      )}
+
+      {/* ACTIONS */}
+      {!isMediaItem ? (
+        <div className="flex items-center gap-6 pt-4 border-t border-black/5 dark:border-white/5 mt-auto">
+
+          <button
+            onClick={() => onLikeEvent(item.id, (item as SchoolEvent).likes || 0)}
+            className="flex items-center gap-2 group/like transition-all active:scale-90"
+          >
+            <Heart
+              size={16}
+              className={`transition-all ${
+                (item as SchoolEvent).likes
+                  ? 'text-rose-500 fill-rose-500'
+                  : 'text-slate-500 group-hover/like:text-rose-500'
+              }`}
+            />
+            <span className="text-[10px] font-black text-slate-500 group-hover/like:text-white">
+              {(item as SchoolEvent).likes || 0}
+            </span>
+          </button>
+
+          <button
+            onClick={() => onOpenComments(item as SchoolEvent)}
+            className="flex items-center gap-2 group/comment transition-all active:scale-90"
+          >
+            <MessageSquare size={16} className="text-slate-500 group-hover/comment:text-indigo-400 transition-all" />
+            <span className="text-[10px] font-black text-slate-500 group-hover/comment:text-white">
+              {(item as SchoolEvent).comments?.length || 0}
+            </span>
+          </button>
+
+        </div>
+      ) : (
+        <div className="pt-4 border-t border-black/5 dark:border-white/5 mt-auto flex justify-end">
+          <a
+            href={(item as any).mediaUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[9px] font-black uppercase text-indigo-500 tracking-widest hover:underline"
+          >
+            Ouvrir le document
+          </a>
+        </div>
+      )}
+
+    </div>
+  );
+}) : (
+    <div className="py-12 text-center opacity-30">
+      <Flame size={40} className="mx-auto mb-3" />
+      <p className="text-[10px] font-black uppercase">Aucune actualité récente</p>
+    </div>
+  )}
+</div>
 
       {/* Leaderboard des Classes */}
       <ClassLeaderboard 
@@ -254,6 +316,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         classes={classes} 
         userClassId={currentStudent?.classId} 
       />
+
+      </section>
 
       <div className="h-20" /> {/* Spacer bottom */}
     </div>
