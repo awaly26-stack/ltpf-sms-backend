@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { Landmark, Star, Award, UserCheck, Wrench, Flame, Loader2, Sparkles, ShieldCheck, GraduationCap, Users, UserCircle, Heart, MessageSquare } from 'lucide-react';
-import { SchoolEvent, Student, EventType, SchoolClass } from './types';
+import { SchoolEvent, Student, EventType, SchoolClass, MediaFile } from './types';
+import { StreakWidget } from './StreakWidget';
 import  ClassLeaderboard  from './ClassLeaderboard';
 import  WeeklyChallenge  from './WeeklyChallenge';
 import { CampusQuote } from './CampusQuote';
@@ -16,11 +17,13 @@ const EVENT_TYPE_LABELS: Record<EventType, { label: string, icon: any, color: st
   'CLUB_SCI': { label: 'Clubs Scientifiques', icon: Users, color: 'bg-emerald-600' },
   'GOUVERNEMENT': { label: 'Gouvernement Scolaire', icon: Star, color: 'bg-blue-600' },
   'Atelier': { label: 'Chef d\'Atelier', icon: Wrench, color: 'bg-slate-600' },
-  'Examen': { label: 'Service Examens', icon: Award, color: 'bg-rose-600' }
+  'Examen': { label: 'Service Examens', icon: Award, color: 'bg-rose-600' },
+  'MEDIA_NEWS': { label: 'Actualité Campus', icon: Flame, color: 'bg-orange-600' }
 };
 
 interface HomeViewProps {
   events: SchoolEvent[];
+  mediaFiles: MediaFile[];
   students: Student[];
   classes: SchoolClass[];
   studentStats: { presenceRate: number; totalStudents: number; topStudent: Student | null };
@@ -32,12 +35,38 @@ interface HomeViewProps {
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({ 
-  events, students, classes, studentStats,  onNavigateToAdmin,  onOpenStudentProfile, onUpdateStudent, onLikeEvent, onOpenComments
+  events, mediaFiles, students, classes, studentStats,  onNavigateToAdmin,  onOpenStudentProfile, onUpdateStudent, onLikeEvent, onOpenComments
 }) => {
   const { currentUser, isStaff } = useAuth();
   const topStudent = studentStats.topStudent;
   const topStudentClass = classes.find(c => c.id === topStudent?.classId);
   const currentStudent = students.find(s => s.id === currentUser?.id);
+
+   const combinedFeed = React.useMemo(() => {
+    const newsFromMedia = mediaFiles
+      .filter(m => m.category === 'ACTUALITE')
+      .map(m => ({
+        id: m.id,
+        title: m.name,
+        description: m.description || "",
+        date: m.date,
+        type: 'MEDIA_NEWS' as const,
+        mediaUrl: m.url,
+        mediaType: m.type,
+        senderName: m.senderName,
+        isMedia: true
+      }));
+
+    const standardEvents = events.map(e => ({
+      ...e,
+      isMedia: false
+    }));
+
+    return [...newsFromMedia, ...standardEvents].sort((a,b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [events, mediaFiles]);
+
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500">
@@ -59,6 +88,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
                >
                  <UserCircle size={18} className="text-indigo-400" />
                  <span className="text-[9px] font-black uppercase text-white tracking-widest">Mon Pass</span>
+               </button>
+            )}
+            
+            {isStaff && currentUser && (
+               <button 
+                 onClick={() => {
+                   if (isTeacher) onOpenTeacherProfile?.(currentUser.id);
+                   else onOpenStaffProfile?.(currentUser.id);
+                 }}
+                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95 border border-white/10"
+               >
+                 <UserCircle size={18} className="text-white" />
+                 <span className="text-[10px] font-black uppercase tracking-widest text-white">Profil & Courrier</span>
                </button>
             )}
           </div>
@@ -121,7 +163,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
 
-       
+      <div className="col-span-2">
+          <StreakWidget 
+            absenceLogs={currentStudent?.absenceLogs || topStudent?.absenceLogs || []} 
+            userName={currentStudent?.firstName || topStudent?.firstName}
+          />
+        </div>
 
         {/* Défi Hebdomadaire */}
         <div className="col-span-2">
@@ -141,38 +188,55 @@ export const HomeView: React.FC<HomeViewProps> = ({
           {events.length > 0 ? events.map(ev => {
             const LabelConfig = EVENT_TYPE_LABELS[ev.type] || EVENT_TYPE_LABELS['PROVISEUR'];
             return (
-              <div key={ev.id} className={`glass p-8 rounded-[3rem] space-y-4 shadow-xl border border-white/5 hover:scale-[1.01] transition-all ${ev.isUrgent ? 'border-rose-500/30 ring-1 ring-rose-500/10' : ''}`}>
+              <div key={item.id} className={`glass p-8 rounded-3xl space-y-4 shadow-lg border border-black/5 dark:border-white/5 hover:scale-[1.01] transition-all bg-white dark:bg-[#0f172a]/60 ${(!isMediaItem && (item as SchoolEvent).isUrgent) ? 'border-rose-500/30 ring-1 ring-rose-500/5' : ''}`}>
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-white ${LabelConfig.color}`}>
-                      <LabelConfig.icon size={20} />
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-md ${LabelConfig.color}`}>
+                      <LabelConfig.icon size={18} />
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase text-slate-900 dark:text-white leading-none">{LabelConfig.label}</p>
-                      <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">{new Date(ev.date).toLocaleDateString()}</span>
+                      <p className="text-[10px] font-bold uppercase text-slate-800 dark:text-white leading-none font-display">{isMediaItem ? item.senderName : LabelConfig.label}</p>
+                      <span className="text-[9px] font-medium text-slate-400 uppercase tracking-tighter">{new Date(item.date).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  {ev.isUrgent && <span className="px-3 py-1 bg-rose-600 text-white rounded-full text-[6px] font-black uppercase animate-pulse">Urgent</span>}
+                  {!isMediaItem && (item as SchoolEvent).isUrgent && <span className="px-3 py-1 bg-rose-600 text-white rounded-full text-[8px] font-bold uppercase animate-pulse">Urgent</span>}
+                  {isMediaItem && <span className="px-3 py-1 bg-orange-500/10 text-orange-500 rounded-full text-[8px] font-black uppercase tracking-widest border border-orange-500/20">INFO</span>}
                 </div>
-                <h3 className="text-lg font-black uppercase italic text-slate-900 dark:text-white leading-tight">{ev.title}</h3>
-                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">{ev.description}</p>
                 
-                <div className="flex items-center gap-6 pt-4 border-t border-white/5 mt-auto">
-                  <button 
-                    onClick={() => onLikeEvent(ev.id, ev.likes || 0)}
-                    className="flex items-center gap-2 group/like transition-all active:scale-90"
-                  >
-                    <Heart size={16} className={`transition-all ${ev.likes && ev.likes > 0 ? 'text-rose-500 fill-rose-500' : 'text-slate-500 group-hover/like:text-rose-500'}`} />
-                    <span className="text-[10px] font-black text-slate-500 group-hover/like:text-white">{ev.likes || 0}</span>
-                  </button>
-                  <button 
-                    onClick={() => onOpenComments(ev)}
-                    className="flex items-center gap-2 group/comment transition-all active:scale-90"
-                  >
-                    <MessageSquare size={16} className="text-slate-500 group-hover/comment:text-indigo-400 group-hover/comment:fill-indigo-400/20 transition-all" />
-                    <span className="text-[10px] font-black text-slate-500 group-hover/comment:text-white">{ev.comments?.length || 0}</span>
-                  </button>
-                </div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight font-display lowercase first-letter:uppercase">{item.title}</h3>
+                <p className="text-[13px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{item.description}</p>
+                
+                {isMediaItem && item.mediaUrl && item.mediaType === 'IMAGE' && (
+                  <div className="rounded-2xl overflow-hidden border border-black/5 dark:border-white/5 shadow-xl max-h-[400px]">
+                    <img src={item.mediaUrl} alt={item.title} className="w-full h-full object-contain bg-slate-100 dark:bg-slate-900" />
+                  </div>
+                )}
+
+                {!isMediaItem ? (
+                  <div className="flex items-center gap-6 pt-4 border-t border-black/5 dark:border-white/5 mt-auto">
+                    <button 
+                      onClick={() => onLikeEvent(item.id, (item as SchoolEvent).likes || 0)}
+                      className="flex items-center gap-2 group/like transition-all active:scale-90"
+                    >
+                      <Heart size={16} className={`transition-all ${(item as SchoolEvent).likes && (item as SchoolEvent).likes > 0 ? 'text-rose-500 fill-rose-500' : 'text-slate-500 group-hover/like:text-rose-500'}`} />
+                      <span className="text-[10px] font-black text-slate-500 group-hover/like:text-white">{(item as SchoolEvent).likes || 0}</span>
+                    </button>
+                    <button
+
+                   onClick={() => onOpenComments(item as SchoolEvent)}
+                      className="flex items-center gap-2 group/comment transition-all active:scale-90"
+                    >
+                      <MessageSquare size={16} className="text-slate-500 group-hover/comment:text-indigo-400 group-hover/comment:fill-indigo-400/20 transition-all" />
+                      <span className="text-[10px] font-black text-slate-500 group-hover/comment:text-white">{(item as SchoolEvent).comments?.length || 0}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-4 border-t border-black/5 dark:border-white/5 mt-auto flex justify-end">
+                    <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase text-indigo-500 tracking-widest hover:underline">
+                      Ouvrir le document
+                    </a>
+                  </div>
+                )}
               </div>
             );
           }) : (

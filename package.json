@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-     "dev": "vite",
-  "build": "vite build && npm run build:server",
-  "build:server": "tsc -p tsconfig.server.json",
-  "start": "node dist/server.js"
+    "dev": "vite",
+    "build": "vite build && npm run build:server",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "node dist/server.js"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.18",
@@ -16,6 +16,7 @@
     "express": "^5.2.1",
     "firebase": "^10.14.1",
     "firebase-admin": "^13.8.0",
+    "framer-motion": "^12.38.0",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",

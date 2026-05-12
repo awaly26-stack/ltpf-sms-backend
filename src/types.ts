@@ -95,11 +95,44 @@ export interface Student {
   challengeActions?: ChallengeAction[];
 }
 
+export type InventoryCategory = 'FOURNITURES' | 'INFORMATIQUE' | 'MOBILIER' | 'ENTRETIEN' | 'SPORT' | 'CONSOMMABLES' | 'AUTRES';
+export type InventoryStatus = 'ENTREE' | 'ATTENTE' | 'SERVICE' | 'SORTIE';
+export interface InventoryItem {
+  id: string;
+  ref: string;
+  designation: string;
+  category: InventoryCategory;
+  quantity: number;
+  initialQuantity: number;
+  entryDate: any;
+  status: InventoryStatus;
+  location: string;
+  responsible: string;
+  observations: string;
+  updatedAt: any;
+  createdBy: string;
+}
+
+export interface InventoryMovement {
+  id: string;
+  itemId: string;
+  type: 'IN' | 'OUT' | 'STATUS_CHANGE';
+  quantityChange: number;
+  previousStatus: InventoryStatus;
+  newStatus: InventoryStatus;
+  userId: string;
+  userName: string;
+  timestamp: any;
+  reason: string;
+}
+
 export interface Teacher {
   id: string;
   firstName: string;
   name: string;
   phone?: string;
+  matricule?: string;
+  role: Role;
   subjectIds: string[];
   classIds: string[];
   absenceLogs: AbsenceLog[];
@@ -141,16 +174,16 @@ export interface SchoolEvent {
   likes?: number;
 }
 
-export interface InventoryItem {
+export interface PrivateMail {
   id: string;
-  name: string;
-  category: string;
-  status: 'opérationnel' | 'en panne' | 'en maintenance';
-  quantity: number;
-  threshold?: number;
-  location?: string;
-  lastMaintenance?: string;
-  adminKey: string;
+  senderId: string;
+  senderName: string;
+  senderRole: Role;
+  recipientId: string;
+  subject: string;
+  content: string;
+  date: string;
+  read: boolean;
 }
 
 export interface Internship {
@@ -172,4 +205,20 @@ export interface User {
   assignedClassIds?: string[];
   firebaseUid?: string;
   matricule?: string;
+}
+export type MediaCategory = 'RAPPORT' | 'ACTUALITE' | 'DOCUMENT_PEDAGOGIQUE' | 'ADMINISTRATION';
+export type MediaType = 'AUDIO' | 'PDF' | 'DOC' | 'XLS' | 'IMAGE' | 'AUTRE';
+
+export interface MediaFile {
+  id: string;
+  name: string;
+  url: string;
+  type: MediaType;
+  category: MediaCategory;
+  senderId: string;
+  senderName: string;
+  senderRole: Role;
+  date: string;
+  description?: string;
+  adminKey: string;
 }

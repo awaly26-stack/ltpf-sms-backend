@@ -11,7 +11,7 @@ interface NavigationProps {
 }
 
 export const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
-  const { isStaff } = useAuth();
+  const { isStaff,  isTeacher  } = useAuth();
 
   return (
     <nav className="fixed bottom-6 inset-x-0 mx-auto w-[92%] max-w-md glass h-20 rounded-full flex items-center justify-around px-6 z-40 shadow-2xl animate-in slide-in-from-bottom duration-500 border border-white/5">

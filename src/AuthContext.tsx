@@ -13,6 +13,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isStaff: boolean;
   isSuperAdmin: boolean;
+   isSG: boolean;
+  isTeacher: boolean;
   backendAwake: boolean;
 }
 
@@ -25,6 +27,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [backendAwake, setBackendAwake] = useState(false);
 
   const isSuperAdmin = currentUser?.role === 'ADMIN' || currentUser?.id === 'admin_ltpf';
+   const isSG = currentUser?.role === 'SG';
+  const isTeacher = currentUser?.role === 'PROFESSEUR';
   const isStaff = currentUser ? currentUser.role !== 'ELEVE' : false;
 
   const saveUserSession = useCallback((user: User) => {
@@ -160,6 +164,8 @@ if (responseData.token) {
       logout, 
       isStaff, 
       isSuperAdmin, 
+      isSG,
+      isTeacher,
       backendAwake 
     }}>
       {children}

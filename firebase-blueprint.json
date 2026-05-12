@@ -63,15 +63,31 @@
     },
     "InventoryItem": {
       "title": "InventoryItem",
-      "description": "Matériel des ateliers ou logistique",
+      "description": "Matériel scolaire, informatique, mobilier et consommables.",
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
-        "category": { "type": "string" },
-        "status": { "type": "string" },
-        "quantity": { "type": "number" }
+        "ref": { "type": "string" },
+        "designation": { "type": "string" },
+        "category": { "type": "string", "enum": ["FOURNITURES", "INFORMATIQUE", "MOBILIER", "ENTRETIEN", "SPORT", "CONSOMMABLES", "AUTRES"] },
+        "quantity": { "type": "number" },
+        "status": { "type": "string", "enum": ["ENTREE", "ATTENTE", "SERVICE", "SORTIE"] },
+        "location": { "type": "string" },
+        "responsible": { "type": "string" },
+        "entryDate": { "type": "string", "format": "date-time" }
       },
-      "required": ["name", "category", "quantity"]
+      "required": ["ref", "designation", "category", "quantity"]
+    },
+    "InventoryMovement": {
+      "title": "InventoryMovement",
+      "description": "Historique des entrées/sorties et changements d'états.",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string" },
+        "type": { "type": "string", "enum": ["IN", "OUT", "STATUS_CHANGE"] },
+        "quantityChange": { "type": "number" },
+        "userName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
     },
     "Message": {
       "title": "Message",
@@ -86,6 +102,42 @@
         "read": { "type": "boolean" }
       },
       "required": ["conversationId", "senderId", "receiverId", "text"]
+    },
+    "MediaFile": {
+      "title": "MediaFile",
+      "description": "Document, audio ou image partagé dans le système",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string", "enum": ["AUDIO", "PDF", "DOC", "XLS", "IMAGE", "AUTRE"] },
+        "category": { "type": "string", "enum": ["RAPPORT", "ACTUALITE", "DOCUMENT_PEDAGOGIQUE", "ADMINISTRATION"] },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "adminKey": { "type": "string" }
+      },
+      "required": ["name", "url", "type", "category", "senderId"]
+    },
+    "PrivateMail": {
+      "title": "PrivateMail",
+      "description": "Courrier confidentiel de l'administration vers le personnel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "subject": { "type": "string" },
+        "content": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["senderId", "recipientId", "subject", "content", "date"]
     }
   },
   "firestore": {
@@ -93,9 +145,12 @@
     "classes": { "schema": "SchoolClass", "description": "Liste des classes" },
     "users": { "schema": "Staff", "description": "Personnel administratif et enseignant" },
     "events": { "schema": "SchoolEvent", "description": "Actualités du campus" },
-    "inventory": { "schema": "InventoryItem", "description": "Matériel logistique" },
+    "inventory": { "schema": "InventoryItem", "description": "Matériel logistique et comptabilité matière" },
+    "inventoryMovements": { "schema": "InventoryMovement", "description": "Tracabilité des stocks" },
     "messages": { "schema": "Message", "description": "Messagerie interne" },
     "teachers": { "schema": "object", "description": "Liste des professeurs" },
-    "subjects": { "schema": "object", "description": "Matières enseignées" }
+    "subjects": { "schema": "object", "description": "Matières enseignées" },
+    "media": { "schema": "MediaFile", "description": "Médiathèque et Rapports administratifs" },
+    "private_mail": { "schema": "PrivateMail", "description": "Courrier confidentiel" }
   }
 }

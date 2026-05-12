@@ -183,6 +183,28 @@ apiRouter.post("/auth/login", async (req, res) => {
       role = userData.role || "SURVEILLANT";
       console.log("STAFF MATCH FOUND:", userData.id, "ROLE:", role);
     } else {
+        // =========================
+      // 👨‍🏫 RECHERCHE PROFESSEUR
+      // =========================
+      console.log("STAFF NOT FOUND, SEARCHING IN TEACHERS...");
+      snap = await admin
+        .firestore()
+        .collection("teachers")
+        .where("matricule", "==", normalizedMatricule)
+        .limit(1)
+        .get();
+
+      if (!snap.empty) {
+        const doc = snap.docs[0];
+        const data = doc.data();
+        userData = {
+          id: doc.id,
+          name: `${(data.firstName || "").trim()} ${(data.name || "").trim()}`,
+          ...data,
+        };
+        role = "PROFESSEUR";
+        console.log("TEACHER MATCH FOUND:", userData.id, "ROLE:", role);
+      } else {
       // =========================
       // 🎓 RECHERCHE ÉLÈVE
       // =========================
@@ -217,6 +239,7 @@ apiRouter.post("/auth/login", async (req, res) => {
 
       role = "ELEVE";
     }
+     }
 
     // =========================
     // 🔑 UID
@@ -229,7 +252,7 @@ apiRouter.post("/auth/login", async (req, res) => {
     const permissions =
       role === "ADMIN"
         ? ["ALL"]
-        : role === "SURVEILLANT"
+         : (role === "SURVEILLANT" || role === "COMPTABLE_MATIERE" || role === "CT")
         ? ["READ", "WRITE", "SMS"]
         : ["READ"];
 
@@ -242,7 +265,7 @@ apiRouter.post("/auth/login", async (req, res) => {
       permissions,
     });
 
-    // =========================
+     // =========================
     // ✅ RESPONSE
     // =========================
     return res.json({
@@ -251,6 +274,8 @@ apiRouter.post("/auth/login", async (req, res) => {
       name: userData.name,
       role,
       classId: userData.classId || null,
+      classIds: userData.classIds || null,
+      assignedClassIds: userData.assignedClassIds || null,
       permissions,
     });
 
@@ -314,14 +339,22 @@ async function getOrangeToken(): Promise<string | null> {
 apiRouter.post("/orange/sms", verifyFirebaseToken, async (req: any, res: any) => {
   const user = req.user;
 
-  if (!user.permissions?.includes("SMS") && !user.permissions?.includes("ALL")) {
+  const hasPermission = 
+    user.role === "ADMIN" || 
+    user.permissions?.includes("SMS") || 
+    user.permissions?.includes("ALL") ||
+    user.uid === "admin_ltpf";
+
+  if (!hasPermission) {
+    console.warn(`Permission denied for SMS. User UID: ${user.uid}, Role: ${user.role}`);
     return res.status(403).json({ error: "Not allowed" });
   }
+
   const { to, message } = req.body || {};
 
-    if (!to || !message) {
-      return res.status(400).json({ error: "Missing data" });
-    }
+  if (!to || !message) {
+    return res.status(400).json({ error: "Missing data" });
+  }
 
   const token = await getOrangeToken();
   if (!token) return res.status(503).json({ error: "Orange API unavailable" });

@@ -14,16 +14,47 @@ import { Student, SchoolClass, Subject, User, Incident, Internship, AbsenceLog }
 import { AVAILABLE_BADGES, ADMIN_KEY } from './constants';
 import { QRCodeDisplay } from './components';
 import { sendSMS, sendAbsenceSMS } from './utils';
+import { useAuth } from './AuthContext';
 
 export const StudentDetail = ({ student, classes, subjects, currentUser, onUpdate, onDelete, onClose, onOpenChat }: { 
   student: Student; classes: SchoolClass[]; subjects: Subject[]; currentUser: User; onUpdate: (s: Student) => void; onDelete: (id: string) => void; onClose: () => void; onOpenChat?: (id: string) => void
 }) => {
+const { isSuperAdmin, isSG, isTeacher } = useAuth();
+  
+  const isHighManagement = isSuperAdmin || isSG || currentUser.role === 'PROVISEUR' || currentUser.role === 'DE' || currentUser.role === 'CT' || currentUser.role === 'SURVEILLANT';
   const isStaff = currentUser.role !== 'ELEVE';
   const isOwnProfile = currentUser.id === student.id;
   
   // Restriction d'accès
+  const isAssignedTeacher = isTeacher && currentUser.assignedClassIds?.includes(student.classId);
+  
+  // Le professeur ne peut que LIRE les élèves de ses classes. 
+  // Il ne peut RIEN modifier (absence, incident, badges).
+  // Seul le surveillant et la direction ont ces droits.
   const canSeeFullAccess = isStaff || isOwnProfile;
-  const canEditPersonalInfo = isOwnProfile || isStaff;
+  const canEditPersonalInfo = (isHighManagement && !isTeacher) || isOwnProfile;
+  const canManageAttendance = (isHighManagement && !isTeacher);
+  const canManageIncidents = (isHighManagement && !isTeacher);
+  const canManageBadges = (isHighManagement && !isTeacher);
+  const showMatricule = isSuperAdmin || isOwnProfile || (currentUser.role === 'SURVEILLANT' && currentUser.assignedClassIds?.includes(student.classId));
+
+  // Blocage explicite pour les profs sur les élèves hors de leurs classes
+  if (isTeacher && !isAssignedTeacher && !isHighManagement) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl max-w-sm w-full text-center space-y-4">
+          <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto">
+            <AlertOctagon size={32} />
+          </div>
+          <h2 className="text-xl font-black dark:text-white uppercase tracking-tight">Accès Restreint</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs font-bold leading-relaxed">
+            En tant qu'enseignant, vous n'êtes autorisé à consulter que les profils des élèves inscrits dans vos classes assignées.
+          </p>
+          <button onClick={onClose} className="w-full bg-slate-100 dark:bg-slate-800 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest dark:text-white">Fermer</button>
+        </div>
+      </div>
+    );
+  }
 
   const [localStudent, setLocalStudent] = useState<Student>(student);
   const [activeTab, setActiveTab] = useState<'vie' | 'profil' | 'qr'>('vie');
@@ -364,7 +395,7 @@ export const StudentDetail = ({ student, classes, subjects, currentUser, onUpdat
                       )}
                     </div>
 
-                   {showAbsenceForm && isStaff && (
+                   {showAbsenceForm && canManageAttendance && (
                       <div className="glass p-6 rounded-[2.5rem] border-indigo-500/20 space-y-4 animate-slide-up shadow-xl">
                         <div className="flex items-center justify-between">
                           <p className="text-[10px] font-black text-white uppercase">Heures à ajouter</p>
@@ -393,7 +424,7 @@ export const StudentDetail = ({ student, classes, subjects, currentUser, onUpdat
                       </div>
                     )}
 
-                    {isStaff && localStudent.absenceLogs && localStudent.absenceLogs.length > 0 && (
+                    {canManageAttendance && localStudent.absenceLogs && localStudent.absenceLogs.length > 0 && (
                       <div className="space-y-3 mt-6">
                         <div className="flex items-center justify-between px-2">
                           <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2"><History size={12}/> Historique Récent</h4>
@@ -415,7 +446,7 @@ export const StudentDetail = ({ student, classes, subjects, currentUser, onUpdat
                       </div>
                     )}
 
-                    {showIncidentForm && isStaff && (
+                    {showIncidentForm && canManageIncidents && (
                       <div className="glass p-6 rounded-[2.5rem] border-amber-500/20 space-y-4 animate-slide-up shadow-2xl relative overflow-hidden">
                          <div className="absolute top-0 right-0 p-4 opacity-10 rotate-12"><AlertOctagon size={60} className="text-amber-500" /></div>
                          <div className="space-y-2">
@@ -453,10 +484,11 @@ export const StudentDetail = ({ student, classes, subjects, currentUser, onUpdat
                           <p className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">Absences</p>
                        </div>
                     </div>
-                    {isStaff && localStudent.emergencyPhone && (
+                    
+                    {canManageAttendance && localStudent.emergencyPhone && (
                       <button 
                         onClick={async () => {
-                          const msg = `LTP Fatick: Bonjour votre enfant ${localStudent.firstName} ${localStudent.name} est absent aujourd'hui. Merci de contacter la surveillance.`;
+                          const msg = ` Bonjour votre enfant ${localStudent.firstName} ${localStudent.name} est absent aujourd'hui. Merci de contacter la surveillance.`;
                           const success = await sendSMS(localStudent.emergencyPhone!, msg);
                           if (success) {
                             alert("SMS de rappel envoyé au parent.");
@@ -508,7 +540,7 @@ export const StudentDetail = ({ student, classes, subjects, currentUser, onUpdat
                <div className="space-y-4">
                   <div className="flex items-center justify-between px-2">
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Star size={14} className="text-amber-500" /> Mérites & Gamification</h4>
-                    {isStaff && <span className="text-[7px] font-black text-indigo-400 uppercase italic">Cliquer pour décerner</span>}
+                    {canManageBadges && <span className="text-[7px] font-black text-indigo-400 uppercase italic">Cliquer pour décerner</span>}
                   </div>
                   <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar">
                     {AVAILABLE_BADGES.map(badge => {

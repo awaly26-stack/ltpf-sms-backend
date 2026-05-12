@@ -6,7 +6,7 @@ import {
 import { jsPDF } from "jspdf";
 
 import { db, auth } from './firebaseConfig';
-import { Student, Teacher, SchoolClass, Subject, SchoolEvent, User, Role, InventoryItem, EventType, Comment, AbsenceLog } from './types';
+import { Student, Teacher, SchoolClass, Subject, SchoolEvent, User, Role, InventoryItem, InventoryMovement, EventType, Comment, AbsenceLog, MediaFile } from './types';
 import { ADMIN_KEY, INITIAL_LEVELS, INITIAL_FIELDS, INITIAL_DIPLOMAS } from './constants';
 import { Modal } from './components';
 import { StudentDetail } from './StudentDetail';
@@ -18,6 +18,11 @@ import { generateMatricule, toPlainObject, sendSMS, sendAbsenceSMS, fetchWithRet
 import { HomeView } from './HomeView';
 import { CampusView } from './CampusView';
 import { AdminView } from './AdminView';
+import { InventoryModule } from './InventoryModule';
+import { ChefTravauxModule } from './ChefTravauxModule';
+import { DirecteurEtudesModule } from './DirecteurEtudesModule';
+import { ProviseurModule } from './ProviseurModule';
+import { MediaModule } from './MediaModule';
 
 import { useAuth } from './AuthContext';
 import { Header } from './Header';
@@ -25,7 +30,7 @@ import { Login } from './Login';
 import { Navigation, TabType } from './Navigation';
 
 const App: React.FC = () => {
-  const { currentUser, loading, isAuthReady, isStaff, isSuperAdmin } = useAuth();
+  const { currentUser, loading, isAuthReady, isStaff, isSuperAdmin, isTeacher } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   
@@ -43,12 +48,15 @@ const App: React.FC = () => {
   const [events, setEvents] = useState<SchoolEvent[]>([]);
   const [allStaff, setAllStaff] = useState<User[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+   const [inventoryMovements, setInventoryMovements] = useState<InventoryMovement[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
 
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [chatWithStudentId, setChatWithStudentId] = useState<string | null>(null);
   const [selectedEventForComments, setSelectedEventForComments] = useState<SchoolEvent | null>(null);
+  
   
   const [searchQuery, setSearchQuery] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
@@ -65,13 +73,17 @@ const App: React.FC = () => {
   const [isManageClassesOpen, setIsManageClassesOpen] = useState(false);
   const [isManageSubjectsOpen, setIsManageSubjectsOpen] = useState(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isChefTravauxOpen, setIsChefTravauxOpen] = useState(false);
+  const [isDirecteurEtudesOpen, setIsDirecteurEtudesOpen] = useState(false);
+  const [isProviseurOpen, setIsProviseurOpen] = useState(false);
+  const [isMediaOpen, setIsMediaOpen] = useState(false);
   const [isExportAbsencesOpen, setIsExportAbsencesOpen] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(false);
 
   // Form States
   const [newStaff, setNewStaff] = useState<{firstName: string, name: string, role: Role, matricule?: string}>({ firstName: '', name: '', role: 'SURVEILLANT' });
   const [newStudent, setNewStudent] = useState<Partial<Student>>({ firstName: '', name: '', matricule: '', classId: '' });
-  const [newTeacher, setNewTeacher] = useState<Partial<Teacher>>({ firstName: '', name: '', phone: '', subjectIds: [], classIds: [] });
+  const [newTeacher, setNewTeacher] = useState<Partial<Teacher>>({ firstName: '', name: '', phone: '', subjectIds: [], classIds: [], role: 'PROFESSEUR', matricule: ''  });
   const [newClass, setNewClass] = useState<Partial<SchoolClass>>({ 
     name: '', 
     level: INITIAL_LEVELS[0], 
@@ -80,7 +92,7 @@ const App: React.FC = () => {
   });
   const [newSubject, setNewSubject] = useState<Partial<Subject>>({ name: '', category: 'GENERAL', coefficient: 1 });
   const [newEvent, setNewEvent] = useState<Partial<SchoolEvent>>({ title: '', description: '', type: 'SURVEILLANT_GEN', isUrgent: false });
-  const [newItem, setNewItem] = useState<Partial<InventoryItem>>({ name: '', category: 'Atelier', status: 'opérationnel', quantity: 1 });
+  // const [newItem, setNewItem] = useState<Partial<InventoryItem>>({ name: '', category: 'Atelier', status: 'opérationnel', quantity: 1 });
 
  
   const studentStats = useMemo(() => {
@@ -123,11 +135,13 @@ const App: React.FC = () => {
         const fn = s.firstName || "";
         const n = s.name || "";
         const m = s.matricule || "";
-        return `${fn} ${n}`.toLowerCase().includes(q) || m.toLowerCase().includes(q);
+        const nameMatch = (fn + " " + n).toLowerCase().includes(q);
+        const matriculeMatch = !isTeacher && m.toLowerCase().includes(q);
+        return nameMatch || matriculeMatch;
       });
     }
     return res;
-  }, [students, selectedClassFilter, searchQuery]);
+  }, [students, selectedClassFilter, searchQuery, isTeacher ]);
 
 
   useEffect(() => {
@@ -162,8 +176,14 @@ const App: React.FC = () => {
     });
     const unsubStaff = db.collection("users").onSnapshot((snap) => setAllStaff(snap.docs.filter(d => d.data().role !== 'ELEVE').map(d => ({ id: d.id, ...d.data() } as User))));
     const unsubInventory = db.collection("inventory").onSnapshot((snap) => setInventory(snap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryItem))));
+    const unsubMovements = db.collection("inventoryMovements").onSnapshot((snap) => setInventoryMovements(snap.docs.map(d => ({ id: d.id, ...d.data() } as InventoryMovement))));
+    const unsubMedia = db.collection("media").onSnapshot((snap) => {
+      const files = snap.docs.map(d => ({ id: d.id, ...d.data() } as MediaFile));
+      files.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setMediaFiles(files);
+    });
 
-    return () => { unsubStudents(); unsubTeachers(); unsubClasses(); unsubSubjects(); unsubEvents(); unsubStaff(); unsubInventory(); };
+    return () => { unsubStudents(); unsubTeachers(); unsubClasses(); unsubSubjects(); unsubEvents(); unsubStaff(); unsubInventory(); unsubMovements(); unsubMedia(); };
   }, [isAuthReady, currentUser]);
 
   const handleUpdateStudent = async (s: Student) => {
@@ -281,11 +301,33 @@ const App: React.FC = () => {
     setNewStudent({ firstName: '', name: '', matricule: '', classId: '' });
   };
 
-  const handleAddTeacher = async () => {
+ const handleAddTeacher = async () => {
     if (!newTeacher.name || !newTeacher.firstName) return;
-    await db.collection("teachers").add(toPlainObject({ ...newTeacher, absenceLogs: [], isPresent: true, adminKey: ADMIN_KEY }));
+    const matricule = (newTeacher.matricule?.trim() || generateMatricule()).toUpperCase();
+    await db.collection("teachers").add(toPlainObject({ ...newTeacher, matricule, role: 'PROFESSEUR', absenceLogs: [], isPresent: true, adminKey: ADMIN_KEY }));
     setIsAddTeacherOpen(false);
-    setNewTeacher({ firstName: '', name: '', phone: '', subjectIds: [], classIds: [] });
+    setNewTeacher({ firstName: '', name: '', phone: '', subjectIds: [], classIds: [], role: 'PROFESSEUR', matricule: '' });
+  };
+   const handleFixTeacherMatricules = async () => {
+    setIsAppLoading(true);
+    try {
+      const teachersToFix = teachers.filter(t => !t.matricule || t.matricule.trim() === "");
+      if (teachersToFix.length === 0) {
+        alert("Tous les professeurs ont déjà un matricule.");
+        return;
+      }
+
+      for (const t of teachersToFix) {
+        const newMatricule = generateMatricule();
+        await db.collection("teachers").doc(t.id).update({ matricule: newMatricule });
+      }
+      alert(`${teachersToFix.length} matricules générés avec succès.`);
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la génération des matricules.");
+    } finally {
+      setIsAppLoading(false);
+    }
   };
 
   const handleAddClass = async () => {
@@ -300,10 +342,37 @@ const App: React.FC = () => {
     setNewSubject({ name: '', category: 'GENERAL', coefficient: 1 });
   };
 
-  const handleAddItem = async () => {
-    if (!newItem.name) return;
-    await db.collection("inventory").add(toPlainObject({ ...newItem, adminKey: ADMIN_KEY }));
-    setNewItem({ name: '', category: 'Atelier', status: 'opérationnel', quantity: 1 });
+   const handleCreateInventoryItem = async (item: any) => {
+    setIsAppLoading(true);
+    try {
+      await db.collection("inventory").add(toPlainObject({
+        ...item,
+        entryDate: new Date(),
+        updatedAt: new Date(),
+        createdBy: currentUser?.name || 'Système',
+        adminKey: ADMIN_KEY
+      }));
+    } finally { setIsAppLoading(false); }
+  };
+
+  const handleUpdateInventoryItem = async (id: string, updates: any) => {
+    await db.collection("inventory").doc(id).update(toPlainObject(updates));
+  };
+
+  const handleDeleteInventoryItem = async (id: string) => {
+    if (window.confirm("Supprimer cet article ?")) {
+      await db.collection("inventory").doc(id).delete();
+    }
+  };
+
+  const handleAddInventoryMovement = async (movement: any) => {
+    await db.collection("inventoryMovements").add(toPlainObject({
+      ...movement,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      timestamp: new Date(),
+      adminKey: ADMIN_KEY
+    }));
   };
 
   const generateClassBilanPDF = (classId?: string) => {
@@ -606,6 +675,25 @@ const App: React.FC = () => {
       <Loader2 className="animate-spin" size={48} />
     </div>
   );
+  const handleUploadMedia = async (fileData: Omit<MediaFile, 'id' | 'date' | 'adminKey'>) => {
+    await db.collection("media").add(toPlainObject({
+      ...fileData,
+      date: new Date().toISOString(),
+      adminKey: ADMIN_KEY
+    }));
+  };
+
+  const handleDeleteMedia = async (id: string) => {
+    if (window.confirm("Supprimer ce fichier ?")) {
+      await db.collection("media").doc(id).delete();
+    }
+  };
+
+   if (loading || authLoading || !isAuthReady) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-indigo-600 dark:text-indigo-400">
+      <Loader2 className="animate-spin" size={48} />
+    </div>
+  );
 
   if (!currentUser) return <Login />;
 
@@ -615,10 +703,10 @@ const App: React.FC = () => {
       <Header theme={theme} toggleTheme={toggleTheme} />
 
 
-      <main className="flex-1 overflow-y-auto px-6 pb-32">
-        {activeTab === 'home' && <HomeView events={events} students={students} classes={classes} studentStats={studentStats}   onNavigateToAdmin={() => setActiveTab('admin')} onOpenStudentProfile={setSelectedStudentId} onUpdateStudent={handleUpdateStudent} onLikeEvent={handleLikeEvent} onOpenComments={setSelectedEventForComments} />}
+       <main className="flex-1 overflow-y-auto px-6 pb-32">
+        {activeTab === 'home' && <HomeView events={events} mediaFiles={mediaFiles} students={students} classes={classes} studentStats={studentStats} onNavigateToAdmin={() => setActiveTab('admin')} onOpenStudentProfile={setSelectedStudentId} onOpenTeacherProfile={setSelectedTeacherId} onOpenStaffProfile={setSelectedStaffId} onUpdateStudent={handleUpdateStudent} onLikeEvent={handleLikeEvent} onOpenComments={setSelectedEventForComments} />}
         {activeTab === 'list' && <CampusView students={filteredStudents} teachers={teachers} classes={classes} allStaff={allStaff} searchQuery={searchQuery} setSearchQuery={setSearchQuery} selectedClassFilter={selectedClassFilter} setSelectedClassFilter={setSelectedClassFilter} onSelectStudent={setSelectedStudentId} onSelectTeacher={setSelectedTeacherId} onSelectStaff={setSelectedStaffId} onPresenceChange={handlePresence} />}
-        {activeTab === 'admin' && isStaff && <AdminView allStaff={allStaff} students={students} teachers={teachers} onSelectStaff={setSelectedStaffId} onOpenAddStaff={() => setIsAddStaffOpen(true)} onOpenAddStudent={() => setIsAddStudentOpen(true)} onOpenAddTeacher={() => setIsAddTeacherOpen(true)} onOpenAddEvent={() => setIsAddEventOpen(true)} onOpenManageEvents={() => setIsManageEventsOpen(true)} onOpenManageClasses={() => setIsManageClassesOpen(true)} onOpenManageSubjects={() => setIsManageSubjectsOpen(true)} onOpenInventory={() => setIsInventoryOpen(true)} onOpenExportAbsences={() => setIsExportAbsencesOpen(true)} onOpenExportTeacherAbsences={generateTeachersBilanPDF} onOpenExportWeeklyTeacherAbsences={generateWeeklyTeachersBilanPDF} onOpenManageStaff={() => setIsManageStaffOpen(true)} onOpenManageTeachers={() => setIsManageTeachersOpen(true)} onResetCounters={handleResetAllAbsences} onResetTeacherCounters={handleResetTeacherAbsences} />}
+        {activeTab === 'admin' && isStaff && !isTeacher && <AdminView allStaff={allStaff} students={students} teachers={teachers} onSelectStaff={setSelectedStaffId} onOpenAddStaff={() => setIsAddStaffOpen(true)} onOpenAddStudent={() => setIsAddStudentOpen(true)} onOpenAddTeacher={() => setIsAddTeacherOpen(true)} onOpenAddEvent={() => setIsAddEventOpen(true)} onOpenManageEvents={() => setIsManageEventsOpen(true)} onOpenManageClasses={() => setIsManageClassesOpen(true)} onOpenManageSubjects={() => setIsManageSubjectsOpen(true)} onOpenInventory={() => setIsInventoryOpen(true)} onOpenChefTravaux={() => setIsChefTravauxOpen(true)} onOpenDirecteurEtudes={() => setIsDirecteurEtudesOpen(true)} onOpenProviseur={() => setIsProviseurOpen(true)} onOpenMedia={() => setIsMediaOpen(true)} onOpenExportAbsences={() => setIsExportAbsencesOpen(true)} onOpenExportTeacherAbsences={generateTeachersBilanPDF} onOpenExportWeeklyTeacherAbsences={generateWeeklyTeachersBilanPDF} onOpenManageStaff={() => setIsManageStaffOpen(true)} onOpenManageTeachers={() => setIsManageTeachersOpen(true)} onFixTeacherMatricules={handleFixTeacherMatricules} onResetCounters={handleResetAllAbsences} onResetTeacherCounters={handleResetTeacherAbsences} />}
         {activeTab === 'chat' && <Messaging currentUser={currentUser} students={students} targetStudentId={chatWithStudentId} onClose={() => setActiveTab('home')} />}
       </main>
 
@@ -812,8 +900,8 @@ const App: React.FC = () => {
           <button onClick={handleAddStaff} className="w-full bg-emerald-600 text-white py-6 rounded-2xl font-black uppercase text-[11px] shadow-xl">Valider la création</button>
         </div>
       </Modal>
-
-      {/* MODAL GESTION PROFESSEURS */}
+      
+        {/* MODAL GESTION PROFESSEURS */}
       <Modal isOpen={isManageTeachersOpen} onClose={() => setIsManageTeachersOpen(false)} title="Professeurs">
         <div className="space-y-6">
           <button onClick={() => { setIsManageTeachersOpen(false); setIsAddTeacherOpen(true); }} className="w-full bg-amber-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all">
@@ -835,16 +923,20 @@ const App: React.FC = () => {
           </div>
         </div>
       </Modal>
-
+      
       {/* MODAL AJOUT PROFESSEUR */}
       <Modal isOpen={isAddTeacherOpen} onClose={() => setIsAddTeacherOpen(false)} title="Nouveau Professeur">
         <div className="space-y-4">
           <input type="text" placeholder="Prénom" value={newTeacher.firstName} onChange={e => setNewTeacher({...newTeacher, firstName: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none" />
           <input type="text" placeholder="NOM" value={newTeacher.name} onChange={e => setNewTeacher({...newTeacher, name: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none" />
+          <input type="text" placeholder="Matricule (Optionnel)" value={newTeacher.matricule} onChange={e => setNewTeacher({...newTeacher, matricule: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none" />
+          <p className="text-[9px] text-slate-500 italic ml-2 px-2">* Laissé vide, un matricule sera généré automatiquement.</p>
           <input type="tel" placeholder="Téléphone" value={newTeacher.phone} onChange={e => setNewTeacher({...newTeacher, phone: e.target.value})} className="w-full bg-slate-900 p-5 rounded-2xl text-white font-bold outline-none" />
           <button onClick={handleAddTeacher} className="w-full bg-amber-600 text-white py-6 rounded-2xl font-black uppercase text-[11px] shadow-xl">Inscrire l'Enseignant</button>
         </div>
       </Modal>
+
+    
 
       <Modal isOpen={isManageClassesOpen} onClose={() => setIsManageClassesOpen(false)} title="Gestion Classes">
         <div className="space-y-6">
@@ -902,22 +994,76 @@ const App: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal isOpen={isInventoryOpen} onClose={() => setIsInventoryOpen(false)} title="Logistique">
-        <div className="space-y-6">
-          <div className="bg-white/5 p-6 rounded-[2rem] space-y-4">
-             <input type="text" placeholder="Matériel..." value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} className="w-full bg-slate-900 p-4 rounded-xl text-white font-bold outline-none" />
-             <button onClick={handleAddItem} className="w-full bg-slate-700 text-white py-4 rounded-xl font-black uppercase text-[10px]">Ajouter au stock</button>
-          </div>
-          <div className="space-y-3 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
-             {inventory.map(item => (
-               <div key={item.id} className="glass p-5 rounded-3xl flex items-center justify-between border border-black/5 dark:border-white/5">
-                  <div><p className="text-sm font-black uppercase text-slate-700 dark:text-white">{item.name}</p></div>
-                  <button onClick={() => db.collection("inventory").doc(item.id).delete()} className="text-rose-500 hover:text-rose-600 transition-colors"><Trash2 size={16} /></button>
-               </div>
-             ))}
-          </div>
-        </div>
-      </Modal>
+       {isProviseurOpen && (
+        <ProviseurModule 
+          onClose={() => setIsProviseurOpen(false)}
+          classes={classes}
+          students={students}
+          teachers={teachers}
+          events={events}
+          inventory={inventory}
+          allStaff={allStaff}
+          mediaFiles={mediaFiles}
+          userName={currentUser?.name}
+        />
+      )}
+       {isInventoryOpen && (
+        <InventoryModule 
+          items={inventory}
+          movements={inventoryMovements}
+          onAddItem={handleCreateInventoryItem}
+          onUpdateItem={handleUpdateInventoryItem}
+          onDeleteItem={handleDeleteInventoryItem}
+          onAddMovement={handleAddInventoryMovement}
+          isStaff={isStaff}
+          userRole={currentUser?.role}
+          onClose={() => setIsInventoryOpen(false)}
+        />
+      )}
+
+      {isChefTravauxOpen && (
+        <ChefTravauxModule 
+          onClose={() => setIsChefTravauxOpen(false)}
+          onOpenInventory={() => setIsInventoryOpen(true)}
+          onOpenAddEvent={() => setIsAddEventOpen(true)}
+          onOpenManageEvents={() => setIsManageEventsOpen(true)}
+          classes={classes}
+          students={students}
+          events={events}
+          inventory={inventory}
+          movements={inventoryMovements}
+          onUpdateStudent={handleUpdateStudent}
+          userRole={currentUser?.role}
+          userName={currentUser?.name}
+        />
+      )}
+
+      {isDirecteurEtudesOpen && (
+        <DirecteurEtudesModule 
+          onClose={() => setIsDirecteurEtudesOpen(false)}
+          classes={classes}
+          teachers={teachers}
+          userName={currentUser?.name}
+          onUpdateClass={async (c) => {
+            const {id, ...data} = toPlainObject(c);
+            await db.collection("classes").doc(id).update(data);
+          }}
+          onUpdateTeacher={async (t) => {
+            const {id, ...data} = toPlainObject(t);
+            await db.collection("teachers").doc(id).update(data);
+          }}
+        />
+      )}
+      
+      {isMediaOpen && (
+        <MediaModule 
+          onClose={() => setIsMediaOpen(false)}
+          mediaFiles={mediaFiles}
+          onUpload={handleUploadMedia}
+          onDelete={handleDeleteMedia}
+          currentUser={currentUser}
+        />
+      )}
 
       <Modal isOpen={isExportAbsencesOpen} onClose={() => setIsExportAbsencesOpen(false)} title="Export Rapports">
         <div className="space-y-4">

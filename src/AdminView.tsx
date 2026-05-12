@@ -23,6 +23,10 @@ interface AdminViewProps {
   onOpenManageClasses: () => void;
   onOpenManageSubjects: () => void;
   onOpenInventory: () => void;
+  onOpenChefTravaux: () => void;
+  onOpenDirecteurEtudes: () => void;
+  onOpenProviseur: () => void;
+  onOpenMedia: () => void;
   onOpenExportAbsences: () => void;
   onOpenExportTeacherAbsences: () => void;
   onOpenExportWeeklyTeacherAbsences: () => void;
@@ -30,6 +34,7 @@ interface AdminViewProps {
   onOpenManageTeachers: () => void; 
   onResetCounters?: () => void;
   onResetTeacherCounters?: () => void;
+  onFixTeacherMatricules?: () => void;
 }
 
 const ROLE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
@@ -38,13 +43,14 @@ const ROLE_CONFIG: Record<string, { label: string, icon: any, color: string }> =
   'DE': { label: 'Dir. des Études', icon: GraduationCap, color: 'text-violet-500 bg-violet-500/10' },
   'CT': { label: 'Chef des Travaux', icon: Briefcase, color: 'text-amber-500 bg-amber-500/10' },
   'SG': { label: 'Surveillant Gén.', icon: Landmark, color: 'text-emerald-500 bg-emerald-500/10' },
+  'COMPTABLE_MATIERE': { label: 'Comptable Matière', icon: Hammer, color: 'text-sky-500 bg-sky-500/10' },
   'SURVEILLANT': { label: 'Surveillant', icon: ShieldCheck, color: 'text-slate-400 bg-slate-400/10' }
 };
 
 export const AdminView: React.FC<AdminViewProps> = ({
-   allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters
+   allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory,onOpenChefTravaux, onOpenDirecteurEtudes, onOpenProviseur, onOpenMedia, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters, onFixTeacherMatricules
 }) => {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, isSG, currentUser } = useAuth();
 
   const topManagement = useMemo(() => {
     const roles = ['ADMIN', 'PROVISEUR', 'DE', 'CT', 'SG'];
@@ -89,6 +95,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     teachers: { total: totalTeachers, absences: teacherAbsenceTotal, motifs: teacherMotifs }
   };
 }, [students, teachers]);
+
   return (
     <div className="space-y-12 pb-32 animate-in slide-in-from-bottom duration-700">
       
@@ -160,7 +167,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
           <h4 className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.3em] flex items-center gap-2">
             <ShieldHalf size={16} /> Haute Direction LTP
           </h4>
-          {isSuperAdmin && (
+          {(isSuperAdmin || isSG) && (
             <button onClick={onOpenAddStaff} className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg active:scale-90 transition-transform"><Plus size={16} /></button>
           )}
         </div>
@@ -201,7 +208,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
           </button>
 
-          {isSuperAdmin && (
+          {(isSuperAdmin || isSG) && (
             <button onClick={onOpenManageStaff} className="glass p-8 rounded-[3rem] flex items-center gap-6 border border-white/5 group hover:bg-white/5 transition-all shadow-xl text-left border-emerald-500/10">
               <div className="h-14 w-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><ShieldCheck size={24} /></div>
               <div>
@@ -267,11 +274,85 @@ export const AdminView: React.FC<AdminViewProps> = ({
                <p className="text-[8px] font-bold text-violet-400 uppercase tracking-widest mt-1">Modifier/Supprimer</p>
             </div>
           </button>
-
-          <button onClick={onOpenInventory} className="glass p-8 rounded-[3rem] flex items-center gap-6 border border-white/5 group hover:bg-white/5 transition-all shadow-xl text-left">
-            <div className="h-14 w-14 bg-slate-800 rounded-2xl flex items-center justify-center text-white shadow-lg"><Hammer size={24} /></div>
-            <p className="text-sm font-black uppercase dark:text-white">Logistique</p>
+           <button 
+            onClick={() => {
+              const userRole = (currentUser as any)?.role;
+              if (userRole === 'ADMIN' || userRole === 'PROVISEUR') {
+                onOpenProviseur();
+              } else {
+                alert("Accès réservé au Proviseur et à l'Admin LTP.");
+              }
+            }} 
+            className="glass p-8 rounded-3xl flex items-center gap-6 border border-black/5 dark:border-white/5 bg-white dark:bg-white/5 group hover:bg-slate-900 group-hover:text-white transition-all shadow-md text-left"
+          >
+            <div className="h-14 w-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg border border-white/10"><Shield size={24} /></div>
+            <div>
+              <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display group-hover:text-white">Cabinet du Proviseur</p>
+              {((currentUser as any)?.role !== 'ADMIN' && (currentUser as any)?.role !== 'PROVISEUR') && (
+                <p className="text-[8px] font-bold text-rose-500 uppercase tracking-widest mt-1">Accès Restreint</p>
+              )}
+            </div>
           </button>
+
+           <button 
+            onClick={() => {
+              const userRole = (currentUser as any)?.role;
+              if (userRole === 'ADMIN' || userRole === 'DE') {
+                onOpenDirecteurEtudes();
+              } else {
+                alert("Accès réservé au Directeur des Études et à l'Admin LTP.");
+              }
+            }} 
+            className="glass p-8 rounded-3xl flex items-center gap-6 border border-black/5 dark:border-white/5 bg-white dark:bg-white/5 group hover:bg-violet-50 dark:hover:bg-white/10 transition-all shadow-md text-left"
+          >
+            <div className="h-14 w-14 bg-violet-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><GraduationCap size={24} /></div>
+            <div>
+              <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display">Direction des Études</p>
+              {((currentUser as any)?.role !== 'ADMIN' && (currentUser as any)?.role !== 'DE') && (
+                <p className="text-[8px] font-bold text-rose-500 uppercase tracking-widest mt-1">Accès Restreint</p>
+              )}
+            </div>
+          </button>
+           <button 
+            onClick={() => {
+              const userRole = (currentUser as any)?.role;
+              if (userRole === 'ADMIN' || userRole === 'CT') {
+                onOpenChefTravaux();
+              } else {
+                alert("Accès réservé au Chef des Travaux et à l'Admin LTP.");
+              }
+            }} 
+            className="glass p-8 rounded-3xl flex items-center gap-6 border border-black/5 dark:border-white/5 bg-white dark:bg-white/5 group hover:bg-amber-50 dark:hover:bg-white/10 transition-all shadow-md text-left"
+          >
+            <div className="h-14 w-14 bg-amber-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Briefcase size={24} /></div>
+            <div>
+              <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display">Chef des Travaux</p>
+              {((currentUser as any)?.role !== 'ADMIN' && (currentUser as any)?.role !== 'CT') && (
+                <p className="text-[8px] font-bold text-rose-500 uppercase tracking-widest mt-1">Accès Restreint</p>
+              )}
+            </div>
+          </button>
+
+          <button 
+            onClick={() => {
+              const userRole = (currentUser as any)?.role;
+              if (userRole === 'ADMIN' || userRole === 'COMPTABLE_MATIERE') {
+                onOpenInventory();
+              } else {
+                alert("Accès réservé au Comptable Matière et à l'Admin LTP.");
+              }
+            }} 
+            className="glass p-8 rounded-3xl flex items-center gap-6 border border-black/5 dark:border-white/5 bg-white dark:bg-white/5 group hover:bg-sky-50 dark:hover:bg-white/10 transition-all shadow-md text-left"
+          >
+            <div className="h-14 w-14 bg-sky-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Hammer size={24} /></div>
+            <div>
+              <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display">Logistique</p>
+              {((currentUser as any)?.role !== 'ADMIN' && (currentUser as any)?.role !== 'COMPTABLE_MATIERE') && (
+                <p className="text-[8px] font-bold text-rose-500 uppercase tracking-widest mt-1">Accès Restreint</p>
+              )}
+            </div>
+          </button>
+          
         </div>
       </section>
     </div>
