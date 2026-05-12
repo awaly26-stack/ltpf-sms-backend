@@ -689,7 +689,7 @@ const App: React.FC = () => {
     }
   };
 
-   if (loading || authLoading || !isAuthReady) return (
+   if (loading ||  !isAuthReady) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-indigo-600 dark:text-indigo-400">
       <Loader2 className="animate-spin" size={48} />
     </div>
