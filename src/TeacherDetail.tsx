@@ -53,6 +53,7 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
     motif: 'Inconnu'
   });
 
+  const [showMailbox, setShowMailbox] = useState(false);
   const teacherSubjects = useMemo(() => {
     return (localTeacher.subjectIds || [])
       .map(sid => subjects.find(s => s.id === sid)?.name)

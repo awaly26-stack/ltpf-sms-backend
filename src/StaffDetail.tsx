@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { 
-  ArrowLeft, ShieldCheck, User as UserIcon, Building, 
+  ArrowLeft,Shield, ShieldCheck, User as UserIcon, Building, 
   Trash2, Save, CheckCircle, XCircle, Info, Lock
 } from 'lucide-react';
 import { User, SchoolClass } from './types';

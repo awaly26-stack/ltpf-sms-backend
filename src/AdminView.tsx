@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { 
-  ShieldHalf, Plus, Layers, UserCog, Activity, UserPlus, 
+  Shield, ShieldHalf, Plus, Layers, UserCog, Activity, UserPlus, 
   Hammer, Landmark, Gavel, Briefcase, GraduationCap, 
   ShieldCheck, Users, FileDown, ClipboardList, ChevronRight,
   PieChart, BarChart3, TrendingUp, Clock, AlertCircle, RotateCcw, UserMinus, BookOpen, Megaphone, Settings
