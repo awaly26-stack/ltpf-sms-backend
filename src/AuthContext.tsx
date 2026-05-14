@@ -133,6 +133,7 @@ if (responseData.token) {
         name: responseData.name,
         role: responseData.role,
         classId: responseData.classId || null,
+        assignedClassIds: responseData.assignedClassIds || responseData.classIds || [],
       };
 
       setCurrentUser(user);
