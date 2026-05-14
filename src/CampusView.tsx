@@ -96,7 +96,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
             <GraduationCap size={16} /> Profs
           </button>
         )}
-        {(isSGOrAdmin || userRole === 'SURVEILLANT') && (
+        {(isSGOrAdmin || userRole === 'SURVEILLANT' || isTeacher) && (
           <button 
             onClick={() => setActiveCategory('staff')}
             className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl text-[10px] font-bold uppercase tracking-wider transition-all font-display ${activeCategory === 'staff' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
