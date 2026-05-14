@@ -51,15 +51,15 @@ export const CampusView: React.FC<CampusViewProps> = ({
   const filteredStaff = React.useMemo(() => {
     const q = (searchQuery || "").toLowerCase();
     // Only SG+ can see staff list
-    if (!isSGOrAdmin) return [];
+    if (!isStaff) return [];
     
     return allStaff
-      .filter(s => s.role === 'SURVEILLANT' || s.role === 'SG')
+       .filter(s => ['SURVEILLANT', 'SG', 'PROVISEUR', 'DE', 'CT', 'ADMIN', 'COMPTABLE_MATIERE', 'INTENDANT'].includes(s.role || ''))
       .filter(s => {
         const name = s.name || "";
         return name.toLowerCase().includes(q);
       });
-  }, [allStaff, searchQuery, isSGOrAdmin]);
+  }, [allStaff, searchQuery, isStaff]);
 
   const filteredTeachers = React.useMemo(() => {
     const q = (searchQuery || "").toLowerCase();
@@ -101,7 +101,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
             onClick={() => setActiveCategory('staff')}
             className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl text-[10px] font-bold uppercase tracking-wider transition-all font-display ${activeCategory === 'staff' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           >
-            <ShieldCheck size={16} /> Surveillants
+            <ShieldCheck size={16} /> Administration
           </button>
         )}
       </div>
