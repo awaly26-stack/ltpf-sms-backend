@@ -4,11 +4,12 @@ import {
   ChevronRight, Wrench, Building2, ClipboardList, 
   BarChart3, Calendar, Clock, AlertCircle, ArrowLeftRight,
   Plus, Search, Building, User, Calendar as CalendarIcon, CheckCircle2,
-  Trash2, ArrowLeft
+  Trash2, ArrowLeft, Heart, Star, UserPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SchoolClass, Student, Internship, SchoolEvent, InventoryItem, InventoryMovement } from './types';
+import { SchoolClass, Student, Internship, SchoolEvent, InventoryItem, InventoryMovement, TechnicalProject } from './types';
 import { INITIAL_FIELDS, ADMIN_KEY } from './constants';
+import { db } from './firebaseConfig';
 
 interface ChefTravauxModuleProps {
   onClose: () => void;
@@ -20,6 +21,7 @@ interface ChefTravauxModuleProps {
   movements: InventoryMovement[];
   classes: SchoolClass[];
   students: Student[];
+   technicalProjects?: TechnicalProject[];
   onUpdateStudent: (student: Student) => Promise<void>;
   userRole?: string;
   userName?: string;
@@ -27,12 +29,13 @@ interface ChefTravauxModuleProps {
 
 export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({ 
   onClose, onOpenInventory, onOpenAddEvent, onOpenManageEvents, 
-  events, inventory, movements, classes, students, onUpdateStudent, 
+  events, inventory, movements, classes, students,  technicalProjects = [], onUpdateStudent, 
   userRole, userName 
 }) => {
   const [activeSection, setActiveSection] = useState<'overview' | 'sections' | 'internships' | 'projects'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingInternship, setIsAddingInternship] = useState(false);
+   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newInternship, setNewInternship] = useState<Partial<Internship>>({
     companyName: '',
     tutorName: '',
@@ -40,7 +43,16 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     endDate: '',
     status: 'A venir'
   });
+  const [newProject, setNewProject] = useState<Partial<TechnicalProject>>({
+    title: '',
+    description: '',
+    studentNames: [],
+    classId: '',
+    imageUrl: '',
+    featured: false
+  });
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+   const [projectStudentName, setProjectStudentName] = useState('');
 
   const filieresData = useMemo(() => {
     return INITIAL_FIELDS.map(f => {
@@ -70,11 +82,18 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     i.companyName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  
+  const filteredProjects = technicalProjects.filter(p => 
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.studentNames.some(sn => sn.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   const stats = [
     { label: 'Ateliers Actifs', val: events.filter(e => e.type === 'Atelier').length.toString(), icon: Wrench, color: 'text-blue-500', bg: 'bg-blue-50' },
     { label: 'Classes Techniques', val: filieresData.reduce((acc, f) => acc + f.classesCount, 0).toString(), icon: Building2, color: 'text-indigo-500', bg: 'bg-indigo-50' },
     { label: 'Stages en cours', val: allInternships.filter(i => i.status === 'En cours').length.toString(), icon: GraduationCap, color: 'text-emerald-500', bg: 'bg-emerald-50' },
     { label: 'Projets d\'examen', val: events.filter(e => e.type === 'Examen').length.toString(), icon: ClipboardList, color: 'text-amber-500', bg: 'bg-amber-50' },
+     { label: 'Mur de Fierté', val: technicalProjects.length.toString(), icon: Star, color: 'text-amber-500', bg: 'bg-amber-50' },
   ];
 
   const handleAddInternship = async () => {
@@ -116,6 +135,46 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     } catch (e) {
       alert("Erreur lors de l'ajout du stage.");
     }
+  };
+
+   const handleAddProject = async () => {
+    if (!newProject.title || !newProject.description || !newProject.classId || newProject.studentNames!.length === 0) {
+      alert("Veuillez remplir les informations du projet.");
+      return;
+    }
+
+    const project: TechnicalProject = {
+      id: Math.random().toString(36).substr(2, 9),
+      title: newProject.title!,
+      description: newProject.description!,
+      studentNames: newProject.studentNames!,
+      classId: newProject.classId!,
+      imageUrl: newProject.imageUrl,
+      date: new Date().toISOString(),
+      votes: 0,
+      featured: newProject.featured || false,
+      adminKey: ADMIN_KEY
+    };
+
+    try {
+      await db.collection('technicalProjects').doc(project.id).set(project);
+      setIsAddingProject(false);
+      setNewProject({
+        title: '',
+        description: '',
+        studentNames: [],
+        classId: '',
+        imageUrl: '',
+        featured: false
+      });
+    } catch (e) {
+      alert("Erreur lors de l'ajout du projet.");
+    }
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    if (!confirm("Supprimer ce projet du mur de fierté ?")) return;
+    await db.collection('technicalProjects').doc(id).delete();
   };
 
   const handleDeleteInternship = async (studentId: string, internshipId: string) => {
@@ -478,6 +537,181 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
                   <div className="col-span-full py-20 text-center glass rounded-[2.5rem] border border-dashed border-slate-200 dark:border-white/10">
                      <GraduationCap size={48} className="mx-auto mb-4 text-slate-200" />
                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Aucun stage trouvé</p>
+                  </div>
+                )}
+               </div>
+            </motion.div>
+          ) : activeSection === 'projects' ? (
+            <motion.div
+              key="projects"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.05 }}
+              className="space-y-8"
+            >
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white dark:bg-white/5 p-6 rounded-[2rem] border border-black/5 dark:border-white/10 shadow-sm">
+                <div className="relative w-full md:w-96">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Chercher un projet ou un élève..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-slate-100 dark:bg-white/5 border-none rounded-2xl py-3 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 ring-indigo-500/20 transition-all"
+                  />
+                </div>
+                <button 
+                  onClick={() => setIsAddingProject(true)}
+                  className="w-full md:w-auto bg-amber-500 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20"
+                >
+                  <Plus size={16} /> Nouveau Chef-d'œuvre
+                </button>
+              </div>
+
+              {isAddingProject && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white dark:bg-white/5 border border-amber-500/30 p-8 rounded-[2.5rem] shadow-2xl relative"
+                >
+                   <button onClick={() => setIsAddingProject(false)} className="absolute top-6 right-6 text-slate-400 hover:text-rose-500 transition-colors">
+                    <ArrowLeft size={20} className="rotate-90" />
+                  </button>
+                  <h3 className="text-xl font-black font-display mb-8 lowercase flex items-center gap-3">
+                    <Star className="text-amber-500" /> Publier une fierté technique
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Titre du Projet</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Drone de surveillance agricole"
+                          value={newProject.title}
+                          onChange={(e) => setNewProject({...newProject, title: e.target.value})}
+                          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-2xl p-4 text-sm font-bold outline-none"
+                        />
+                     </div>
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Classe Responsable</label>
+                        <select 
+                          value={newProject.classId}
+                          onChange={(e) => setNewProject({...newProject, classId: e.target.value})}
+                          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-2xl p-4 text-sm font-bold outline-none"
+                        >
+                          <option value="">Sélectionner la classe</option>
+                          {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                     </div>
+                     <div className="space-y-2 md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Description / Histoire du succès</label>
+                        <textarea 
+                          rows={3}
+                          placeholder="Décrivez les défis techniques et la réussite de ce projet..."
+                          value={newProject.description}
+                          onChange={(e) => setNewProject({...newProject, description: e.target.value})}
+                          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-2xl p-4 text-sm font-bold outline-none resize-none"
+                        />
+                     </div>
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">URL Image du projet</label>
+                        <input 
+                          type="text" 
+                          placeholder="https://..."
+                          value={newProject.imageUrl}
+                          onChange={(e) => setNewProject({...newProject, imageUrl: e.target.value})}
+                          className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-2xl p-4 text-sm font-bold outline-none"
+                        />
+                     </div>
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Ajouter des Étudiants</label>
+                        <div className="flex gap-2">
+                           <input 
+                             type="text" 
+                             placeholder="Nom de l'élève"
+                             value={projectStudentName}
+                             onChange={(e) => setProjectStudentName(e.target.value)}
+                             onKeyPress={(e) => {
+                               if (e.key === 'Enter' && projectStudentName.trim()) {
+                                 setNewProject({...newProject, studentNames: [...(newProject.studentNames || []), projectStudentName.trim()]});
+                                 setProjectStudentName('');
+                               }
+                             }}
+                             className="flex-1 bg-slate-100 dark:bg-slate-900 border-none rounded-2xl p-4 text-sm font-bold outline-none"
+                           />
+                           <button 
+                             onClick={() => {
+                               if (projectStudentName.trim()) {
+                                 setNewProject({...newProject, studentNames: [...(newProject.studentNames || []), projectStudentName.trim()]});
+                                 setProjectStudentName('');
+                               }
+                             }}
+                             className="p-4 bg-indigo-600 text-white rounded-2xl"
+                           >
+                             <Plus size={20} />
+                           </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                           {newProject.studentNames?.map((sn, i) => (
+                             <span key={i} className="px-3 py-1 bg-indigo-500/10 text-indigo-600 rounded-full text-[10px] font-black flex items-center gap-2">
+                               {sn}
+                               <Trash2 size={12} className="cursor-pointer hover:text-rose-500" onClick={() => setNewProject({...newProject, studentNames: newProject.studentNames?.filter((_, idx) => idx !== i)})} />
+                             </span>
+                           ))}
+                        </div>
+                     </div>
+                  </div>
+
+                  <button 
+                    onClick={handleAddProject}
+                    className="w-full bg-amber-500 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs hover:bg-amber-600 transition-all shadow-xl shadow-amber-500/20"
+                  >
+                    Exposer sur le Mur de Fierté
+                  </button>
+                </motion.div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredProjects.length > 0 ? (
+                  filteredProjects.map((proj) => (
+                    <div key={proj.id} className="glass p-2 rounded-[2rem] bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 overflow-hidden group">
+                       <div className="aspect-video relative rounded-[1.8rem] overflow-hidden mb-6">
+                          {proj.imageUrl ? (
+                            <img src={proj.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={proj.title} />
+                          ) : (
+                            <div className="w-full h-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+                              <Wrench size={40} className="text-slate-300" />
+                            </div>
+                          )}
+                          <div className="absolute top-4 left-4">
+                             <span className="px-3 py-1 bg-amber-500 text-white rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">FIERTÉ</span>
+                          </div>
+                       </div>
+                       <div className="p-4">
+                          <h4 className="text-md font-black text-slate-900 dark:text-white uppercase mb-2 leading-tight">{proj.title}</h4>
+                          <p className="text-[10px] text-slate-500 mb-6 line-clamp-2">{proj.description}</p>
+                          
+                          <div className="flex flex-wrap gap-1 mb-6">
+                             {proj.studentNames.map((sn, i) => (
+                               <span key={i} className="text-[8px] font-black text-slate-400 border border-slate-200 dark:border-white/5 px-2 py-0.5 rounded-lg uppercase">{sn}</span>
+                             ))}
+                          </div>
+
+                          <div className="flex items-center justify-between pt-4 border-t border-black/5 dark:border-white/5">
+                             <div className="flex items-center gap-2 text-rose-500 font-black text-xs">
+                               <Heart size={14} fill="currentColor" /> {proj.votes}
+                             </div>
+                             <button onClick={() => handleDeleteProject(proj.id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                                <Trash2 size={16} />
+                             </button>
+                          </div>
+                       </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full py-20 text-center glass rounded-[2.5rem] border border-dashed border-slate-200 dark:border-white/10">
+                     <Star size={48} className="mx-auto mb-4 text-slate-200" />
+                     <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Aucun projet au tableau d'honneur</p>
                   </div>
                 )}
               </div>

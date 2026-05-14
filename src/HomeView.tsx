@@ -21,6 +21,7 @@ const EVENT_TYPE_LABELS: Record<EventType, { label: string, icon: any, color: st
   'MEDIA_NEWS': { label: 'Actualité Campus', icon: Flame, color: 'bg-orange-600' }
 };
 
+import { TechnicalPrideWall } from './TechnicalPrideWall';
 interface HomeViewProps {
   events: SchoolEvent[];
   mediaFiles: MediaFile[];
@@ -29,15 +30,17 @@ interface HomeViewProps {
   studentStats: { presenceRate: number; totalStudents: number; topStudent: Student | null };
   onNavigateToAdmin: () => void;
   onOpenStudentProfile?: (id: string) => void;
+  onOpenTeacherProfile?: (id: string) => void;
+  onOpenStaffProfile?: (id: string) => void;
   onUpdateStudent?: (updated: Student) => void;
   onLikeEvent: (eventId: string, currentLikes: number) => void;
   onOpenComments: (event: SchoolEvent) => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({ 
-  events, mediaFiles, students, classes, studentStats,  onNavigateToAdmin,  onOpenStudentProfile, onUpdateStudent, onLikeEvent, onOpenComments
+  events, mediaFiles, students, classes, studentStats,  onNavigateToAdmin,  onOpenStudentProfile, onOpenTeacherProfile, onOpenStaffProfile, onUpdateStudent, onLikeEvent, onOpenComments
 }) => {
-  const { currentUser, isStaff } = useAuth();
+  const { currentUser, isStaff,  isTeacher } = useAuth();
   const topStudent = studentStats.topStudent;
   const topStudentClass = classes.find(c => c.id === topStudent?.classId);
   const currentStudent = students.find(s => s.id === currentUser?.id);
@@ -91,18 +94,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
                </button>
             )}
             
-            {isStaff && currentUser && (
-               <button 
-                 onClick={() => {
-                   if (isTeacher) onOpenTeacherProfile?.(currentUser.id);
-                   else onOpenStaffProfile?.(currentUser.id);
-                 }}
-                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95 border border-white/10"
-               >
-                 <UserCircle size={18} className="text-white" />
-                 <span className="text-[10px] font-black uppercase tracking-widest text-white">Profil & Courrier</span>
-               </button>
-            )}
           </div>
           
           <p className="text-[18px] font-bold italic text-slate-700 dark:text-slate-200 leading-relaxed">"L'excellence par la technique et la rigueur. Bienvenue sur votre plateforme de gestion LTPF Campus."</p>
@@ -178,7 +169,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           />
         </div>
       </div>
-
+       
+        <section className="space-y-12">
+        <TechnicalPrideWall classes={classes} />
+        
       <section className="space-y-6">
         <div className="flex items-center justify-between px-2">
           <h4 className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-2"><Flame size={16} className="text-orange-500" /> Fil d'Activité</h4>
@@ -316,9 +310,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
         classes={classes} 
         userClassId={currentStudent?.classId} 
       />
-
       </section>
-
+      
+      </section>
       <div className="h-20" /> {/* Spacer bottom */}
     </div>
   );

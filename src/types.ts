@@ -1,6 +1,6 @@
 
-export type Role = 'ADMIN' | 'PROVISEUR' | 'DE' | 'CT' | 'SG' | 'SURVEILLANT' | 'ELEVE';
-export type EventType = 'PROVISEUR' | 'GOUVERNEMENT' | 'CLUB_ENV' | 'CLUB_SCI' | 'DE_CT' | 'SURVEILLANT_GEN' | 'Atelier' | 'Examen';
+export type Role = 'ADMIN' | 'PROVISEUR' | 'DE' | 'CT' | 'SG' | 'SURVEILLANT' | 'ELEVE' | 'COMPTABLE_MATIERE' | 'PROFESSEUR' | 'INTENDANT';
+export type EventType = 'PROVISEUR' | 'GOUVERNEMENT' | 'CLUB_ENV' | 'CLUB_SCI' | 'DE_CT' | 'SURVEILLANT_GEN' | 'Atelier' | 'Examen' | 'MEDIA_NEWS';
 export type AbsenceMotif = 'Maladie' | 'Mission' | 'Permission' | 'Inconnu';
 export type SubjectCategory = 'GENERAL' | 'TECHNIQUE' | 'PROFESSIONNEL';
 export type Trimester = 1 | 2 | 3;
@@ -97,6 +97,7 @@ export interface Student {
 
 export type InventoryCategory = 'FOURNITURES' | 'INFORMATIQUE' | 'MOBILIER' | 'ENTRETIEN' | 'SPORT' | 'CONSOMMABLES' | 'AUTRES';
 export type InventoryStatus = 'ENTREE' | 'ATTENTE' | 'SERVICE' | 'SORTIE';
+
 export interface InventoryItem {
   id: string;
   ref: string;
@@ -184,16 +185,137 @@ export interface PrivateMail {
   content: string;
   date: string;
   read: boolean;
+  attachments?: { name: string; url: string; type: MediaType }[];
+}
+
+export type PaymentType = 'INSCRIPTION' | 'SCOLARITE' | 'EXAMEN' | 'AUTRE';
+export type PaymentStatus = 'COMPLETE' | 'PARTIEL' | 'ATTENTE' | 'ANNULE';
+
+export interface Payment {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  amount: number;
+  totalDue: number;
+  type: PaymentType;
+  status: PaymentStatus;
+  date: string;
+  reference: string;
+  receivedBy: string;
+  receivedByName: string;
+  receiptUrl?: string;
+}
+
+export type CertificateType = 'SCOLARITE' | 'REUSSITE' | 'BONNE_CONDUITE' | 'ASSIDUITE';
+
+export interface IssuedCertificate {
+  id: string;
+  studentId: string;
+  studentName: string;
+  type: CertificateType;
+  issueDate: string;
+  expiryDate?: string;
+  issuerId: string;
+  issuerName: string;
+  issuerRole: Role;
+  uniqueCode: string; // For QR verification
+  status: 'VALIDE' | 'EXPIRE' | 'REVOQUE';
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  sector: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  address: string;
+  description?: string;
+  isPartner: boolean;
 }
 
 export interface Internship {
   id: string;
   studentId: string;
+  studentName?: string;
+  classId?: string;
+  companyId?: string;
   companyName: string;
-  tutorName: string;
   startDate: string;
   endDate: string;
-  status: 'A venir' | 'En cours' | 'Terminé';
+  status: 'PROPOSÉ' | 'CONVENTIONNÉ' | 'EN_COURS' | 'TERMINÉ' | 'ANNULÉ' | 'A venir' | 'En cours' | 'Terminé';
+  tutorName: string;
+  tutorPhone?: string;
+  logbookUrl?: string;
+  finalReportUrl?: string;
+  grade?: number;
+  comments?: string;
+  adminKey: string;
+}
+
+export interface AlumniRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  graduationYear: number;
+  lastKnownStatus: 'ÉTUDES_SUP' | 'SALARIE' | 'ENTREPRENEUR' | 'RECHERCHE_EMPLOI';
+  currentCompany?: string;
+  currentField?: string;
+  email: string;
+  linkedinUrl?: string;
+}
+
+export interface LessonLog {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  date: string;
+  duration: number; // in minutes
+  topic: string;
+  content: string;
+  homework?: string;
+  materialsUsed?: string[];
+}
+
+export interface ResourceFile {
+  id: string;
+  title: string;
+  description?: string;
+  url: string;
+  type: 'PDF' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+  classId: string; // Linked to a specific class
+  subjectId: string;
+  uploadedBy: string;
+  uploadDate: string;
+}
+
+export interface ExamSchedule {
+  id: string;
+  title: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  room: string;
+  type: 'DEVOIR' | 'COMPOSITION' | 'BLANC';
+}
+
+export interface TechnicalProject {
+  id: string;
+  title: string;
+  description: string;
+  studentNames: string[];
+  classId: string;
+  imageUrl?: string;
+  date: string;
+  votes: number;
+  featured: boolean;
   adminKey: string;
 }
 
@@ -206,7 +328,8 @@ export interface User {
   firebaseUid?: string;
   matricule?: string;
 }
-export type MediaCategory = 'RAPPORT' | 'ACTUALITE' | 'DOCUMENT_PEDAGOGIQUE' | 'ADMINISTRATION';
+
+export type MediaCategory = 'RAPPORT' | 'ACTUALITE' | 'DOCUMENT_PEDAGOGIQUE' | 'ADMINISTRATION' | 'PROJECTS';
 export type MediaType = 'AUDIO' | 'PDF' | 'DOC' | 'XLS' | 'IMAGE' | 'AUTRE';
 
 export interface MediaFile {

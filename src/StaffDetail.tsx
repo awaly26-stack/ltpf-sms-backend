@@ -30,7 +30,7 @@ export const StaffDetail = ({
   const { currentUser } = useAuth();
   const isMe = currentUser?.id === staff.id;
   const canManage = isSuperAdmin || isSG;
-  const canSendMail = isSuperAdmin || isSG || ['PROVISEUR', 'DE', 'CT'].includes(currentUser?.role || '');
+  const canSendMail = ['ADMIN', 'PROVISEUR', 'DE', 'CT', 'SG', 'SURVEILLANT', 'PROFESSEUR'].includes(currentUser?.role || '');
 
   const [localStaff, setLocalStaff] = useState<User>({
     ...staff,
