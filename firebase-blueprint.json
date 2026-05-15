@@ -151,6 +151,9 @@
     "teachers": { "schema": "object", "description": "Liste des professeurs" },
     "subjects": { "schema": "object", "description": "Matières enseignées" },
     "media": { "schema": "MediaFile", "description": "Médiathèque et Rapports administratifs" },
-    "private_mail": { "schema": "PrivateMail", "description": "Courrier confidentiel" }
+    "private_mail": { "schema": "PrivateMail", "description": "Courrier confidentiel" },
+     "lessonLogs": { "schema": "object", "description": "Cahier de texte - Séances de cours" },
+    "resources": { "schema": "object", "description": "Hub Ressources pédagogiques" },
+    "exams": { "schema": "object", "description": "Planning des examens et contrôles" }
   }
 }

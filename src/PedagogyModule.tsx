@@ -28,6 +28,9 @@ export const PedagogyModule: React.FC<PedagogyModuleProps> = ({ onClose, classes
   const [showAddLog, setShowAddLog] = useState(false);
   const [showAddResource, setShowAddResource] = useState(false);
   const [showAddExam, setShowAddExam] = useState(false);
+  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string>('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const unsubLogs = onSnapshot(query(collection(db, 'lessonLogs'), orderBy('date', 'desc')), (snapshot) => {
@@ -45,6 +48,22 @@ export const PedagogyModule: React.FC<PedagogyModuleProps> = ({ onClose, classes
       unsubExams();
     };
   }, []);
+
+   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 800000) {
+        alert("Le fichier est trop volumineux (max 800 Ko)");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFileContent(event.target?.result as string);
+        setFileName(file.name);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleAddLog = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -70,13 +89,19 @@ export const PedagogyModule: React.FC<PedagogyModuleProps> = ({ onClose, classes
     setShowAddLog(false);
   };
 
-  const handleAddResource = async (e: React.FormEvent<HTMLFormElement>) => {
+   const handleAddResource = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    
+    if (!fileContent) {
+      alert("Veuillez sélectionner une pièce jointe.");
+      return;
+    }
+
     const resource = {
       title: formData.get('title') as string,
       type: formData.get('type') as any,
-      url: formData.get('url') as string,
+      url: fileContent,
       classId: formData.get('classId') as string,
       subjectId: formData.get('subjectId') as string,
       uploadedBy: currentUser.name,
@@ -84,10 +109,12 @@ export const PedagogyModule: React.FC<PedagogyModuleProps> = ({ onClose, classes
     };
     await addDoc(collection(db, 'resources'), toPlainObject(resource));
     setShowAddResource(false);
+    setFileContent(null);
+    setFileName('');
   };
 
   const isManagement = currentUser.role === 'ADMIN' || currentUser.role === 'DE' || currentUser.role === 'PROVISEUR';
-  const isTeacher = currentUser.role === 'TEACHER';
+  const isTeacher = currentUser.role === 'PROFESSEUR';
 
   return (
     <div className="fixed inset-0 z-[600] bg-slate-950 flex flex-col md:flex-row animate-in fade-in duration-300 overflow-hidden font-sans">
@@ -324,7 +351,7 @@ export const PedagogyModule: React.FC<PedagogyModuleProps> = ({ onClose, classes
            </div>
          )}
 
-         {showAddResource && (
+          {showAddResource && (
            <div className="fixed inset-0 z-[700] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-slate-900 w-full max-w-lg rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden">
                   <form onSubmit={handleAddResource}>
@@ -350,7 +377,37 @@ export const PedagogyModule: React.FC<PedagogyModuleProps> = ({ onClose, classes
                           <option value="">Sélectionner la matière</option>
                           {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                        </select>
-                       <input name="url" placeholder="Lien de la ressource (Drive, Cloud, etc.)" className="w-full bg-slate-800 border border-white/10 rounded-2xl py-4 px-6 text-sm text-white" required />
+                       
+                       <div className="space-y-4">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pièce Jointe</label>
+                          <div 
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`border-2 border-dashed rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all ${
+                              fileContent 
+                              ? 'border-emerald-500/50 bg-emerald-500/5' 
+                              : 'border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/5'
+                            }`}
+                          >
+                             <input 
+                               type="file" 
+                               ref={fileInputRef} 
+                               onChange={handleFileChange} 
+                               className="hidden" 
+                             />
+                             {fileContent ? (
+                               <div className="flex flex-col items-center">
+                                 <CheckCircle2 className="text-emerald-500 mb-3" size={24} />
+                                 <p className="text-xs font-bold text-white uppercase line-clamp-1">{fileName}</p>
+                               </div>
+                             ) : (
+                               <>
+                                 <Upload className="text-slate-500 mb-3" size={24} />
+                                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Cliquez pour joindre un fichier</p>
+                               </>
+                             )}
+                          </div>
+                       </div>
+
                        <button type="submit" className="w-full bg-emerald-600 text-white py-6 rounded-[2rem] font-black uppercase text-[10px] shadow-xl shadow-emerald-600/20 mt-4">Mettre à disposition</button>
                     </div>
                   </form>

@@ -55,6 +55,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
    allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory,onOpenChefTravaux, onOpenDirecteurEtudes, onOpenProviseur, onOpenMedia, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters, onFixTeacherMatricules, onOpenInternship, onOpenPedagogy
 }) => {
   const { isSuperAdmin, isSG, currentUser } = useAuth();
+   const isTeacher = (currentUser as any)?.role === 'PROFESSEUR';
 
   const topManagement = useMemo(() => {
     const roles = ['ADMIN', 'PROVISEUR', 'DE', 'CT', 'SG'];
@@ -206,6 +207,45 @@ export const AdminView: React.FC<AdminViewProps> = ({
       <section className="space-y-6">
         <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em] px-2 flex items-center gap-2"><Activity size={16} /> Administration Campus</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+           <button 
+            onClick={() => {
+              const userRole = (currentUser as any)?.role;
+              if (userRole === 'ADMIN' || userRole === 'DE' || userRole === 'PROVISEUR' || userRole === 'TEACHER') {
+                onOpenPedagogy();
+              } else {
+                alert("Accès réservé au personnel pédagogique.");
+              }
+            }} 
+            className="glass p-8 rounded-3xl flex items-center gap-6 border border-black/5 dark:border-white/5 bg-white dark:bg-white/5 group hover:bg-emerald-50 dark:hover:bg-white/10 transition-all shadow-md text-left"
+          >
+            <div className="h-14 w-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><BookMarked size={24} /></div>
+            <div>
+              <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display italic">Pédagogie</p>
+              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Cahier de texte & Ressources</p>
+            </div>
+          </button>
+           <button 
+            onClick={() => {
+              const userRole = (currentUser as any)?.role;
+              const authorized = ['ADMIN', 'PROVISEUR', 'DE', 'CT', 'SG', 'COMPTABLE_MATIERE'];
+              if (authorized.includes(userRole)) {
+                onOpenMedia();
+              } else {
+                alert("Accès réservé à l'administration.");
+              }
+            }} 
+            className="glass p-8 rounded-3xl flex items-center gap-6 border border-black/5 dark:border-white/5 bg-white dark:bg-white/5 group hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-md text-left"
+          >
+            <div className="h-14 w-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Share2 size={24} /></div>
+            <div>
+               <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display">Médiathèque & Rapports</p>
+               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1 font-display">Partage de documents</p>
+            </div>
+          </button>
+
+            {!isTeacher && (
+            <>
           <button onClick={onOpenAddStudent} className="glass p-8 rounded-[3rem] flex items-center gap-6 border border-white/5 group hover:bg-white/5 transition-all shadow-xl text-left">
             <div className="h-14 w-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><UserPlus size={24} /></div>
             <p className="text-sm font-black uppercase dark:text-white">Inscrire Élève</p>
@@ -363,24 +403,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
               )}
             </div>
           </button>
-
-          <button 
-            onClick={() => {
-              const userRole = (currentUser as any)?.role;
-              if (userRole === 'ADMIN' || userRole === 'DE' || userRole === 'PROVISEUR' || userRole === 'TEACHER') {
-                onOpenPedagogy();
-              } else {
-                alert("Accès réservé au personnel pédagogique.");
-              }
-            }} 
-            className="glass p-8 rounded-3xl flex items-center gap-6 border border-black/5 dark:border-white/5 bg-white dark:bg-white/5 group hover:bg-emerald-50 dark:hover:bg-white/10 transition-all shadow-md text-left"
-          >
-            <div className="h-14 w-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><BookMarked size={24} /></div>
-            <div>
-              <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display italic">Pédagogie</p>
-              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Cahier de texte & Ressources</p>
-            </div>
-          </button>
+          
+         
           
           <button 
             onClick={() => {
@@ -401,24 +425,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
               )}
             </div>
           </button>
-           <button 
-            onClick={() => {
-              const userRole = (currentUser as any)?.role;
-              const authorized = ['ADMIN', 'PROVISEUR', 'DE', 'CT', 'SG', 'COMPTABLE_MATIERE'];
-              if (authorized.includes(userRole)) {
-                onOpenMedia();
-              } else {
-                alert("Accès réservé à l'administration.");
-              }
-            }} 
-            className="glass p-8 rounded-3xl flex items-center gap-6 border border-black/5 dark:border-white/5 bg-white dark:bg-white/5 group hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-md text-left"
-          >
-            <div className="h-14 w-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Share2 size={24} /></div>
-            <div>
-               <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display">Médiathèque & Rapports</p>
-               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1 font-display">Partage de documents</p>
-            </div>
-          </button>
+           </>
+           )}
           
         </div>
       </section>
