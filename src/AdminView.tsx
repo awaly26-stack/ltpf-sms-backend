@@ -211,7 +211,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
            <button 
             onClick={() => {
               const userRole = (currentUser as any)?.role;
-              if (userRole === 'ADMIN' || userRole === 'DE' || userRole === 'PROVISEUR' || userRole === 'TEACHER') {
+              if (userRole === 'ADMIN' || userRole === 'DE' || userRole === 'PROVISEUR' || userRole === 'PROFESSEUR') {
                 onOpenPedagogy();
               } else {
                 alert("Accès réservé au personnel pédagogique.");
@@ -228,7 +228,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
            <button 
             onClick={() => {
               const userRole = (currentUser as any)?.role;
-              const authorized = ['ADMIN', 'PROVISEUR', 'DE', 'CT', 'SG', 'COMPTABLE_MATIERE'];
+              const authorized = ['ADMIN', 'PROVISEUR', 'DE', 'CT', 'SG', 'COMPTABLE_MATIERE','PROFESSEUR','SURVEILLANT'];
               if (authorized.includes(userRole)) {
                 onOpenMedia();
               } else {
