@@ -103,11 +103,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <CampusQuote />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {/* BLOC GAINDÉ DE LA SEMAINE (MISE À JOUR) */}
-        <div className="col-span-2 glass rounded-[3.5rem] p-8 flex items-center gap-8 bg-gradient-to-br from-indigo-700 via-indigo-900 to-black text-white shadow-2xl border border-white/10 relative overflow-hidden">
-          {/* Décoration Lions en background */}
-          <div className="absolute -right-10 -bottom-10 opacity-10 rotate-12">
+       <div className="grid grid-cols-2 gap-4">
+        {/* BLOC GAINDÉ DE LA SEMAINE (MISE À JOUR RESPONSIVE) */}
+        <div className="col-span-2 glass rounded-[3rem] md:rounded-[3.5rem] p-6 md:p-10 flex flex-col md:flex-row items-center gap-6 md:gap-10 bg-gradient-to-br from-indigo-700 via-indigo-900 to-black text-white shadow-2xl border border-white/10 relative overflow-hidden">
+          {/* Décoration d'arrière-plan */}
+          <div className="absolute -right-12 -top-12 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl opacity-30"></div>
+          <div className="absolute -right-10 -bottom-10 opacity-10 rotate-12 hidden md:block">
             <Award size={200} />
           </div>
           
