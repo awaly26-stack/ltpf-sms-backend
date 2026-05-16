@@ -21,7 +21,7 @@ interface ChefTravauxModuleProps {
   movements: InventoryMovement[];
   classes: SchoolClass[];
   students: Student[];
-   technicalProjects?: TechnicalProject[];
+  technicalProjects?: TechnicalProject[];
   onUpdateStudent: (student: Student) => Promise<void>;
   userRole?: string;
   userName?: string;
@@ -29,13 +29,13 @@ interface ChefTravauxModuleProps {
 
 export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({ 
   onClose, onOpenInventory, onOpenAddEvent, onOpenManageEvents, 
-  events, inventory, movements, classes, students,  technicalProjects = [], onUpdateStudent, 
+  events, inventory, movements, classes, students, technicalProjects = [], onUpdateStudent, 
   userRole, userName 
 }) => {
   const [activeSection, setActiveSection] = useState<'overview' | 'sections' | 'internships' | 'projects'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingInternship, setIsAddingInternship] = useState(false);
-   const [isAddingProject, setIsAddingProject] = useState(false);
+  const [isAddingProject, setIsAddingProject] = useState(false);
   const [newInternship, setNewInternship] = useState<Partial<Internship>>({
     companyName: '',
     tutorName: '',
@@ -52,7 +52,7 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     featured: false
   });
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-   const [projectStudentName, setProjectStudentName] = useState('');
+  const [projectStudentName, setProjectStudentName] = useState('');
 
   const filieresData = useMemo(() => {
     return INITIAL_FIELDS.map(f => {
@@ -82,7 +82,6 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     i.companyName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  
   const filteredProjects = technicalProjects.filter(p => 
     p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.studentNames.some(sn => sn.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -92,8 +91,7 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     { label: 'Ateliers Actifs', val: events.filter(e => e.type === 'Atelier').length.toString(), icon: Wrench, color: 'text-blue-500', bg: 'bg-blue-50' },
     { label: 'Classes Techniques', val: filieresData.reduce((acc, f) => acc + f.classesCount, 0).toString(), icon: Building2, color: 'text-indigo-500', bg: 'bg-indigo-50' },
     { label: 'Stages en cours', val: allInternships.filter(i => i.status === 'En cours').length.toString(), icon: GraduationCap, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { label: 'Projets d\'examen', val: events.filter(e => e.type === 'Examen').length.toString(), icon: ClipboardList, color: 'text-amber-500', bg: 'bg-amber-50' },
-     { label: 'Mur de Fierté', val: technicalProjects.length.toString(), icon: Star, color: 'text-amber-500', bg: 'bg-amber-50' },
+    { label: 'Mur de Fierté', val: technicalProjects.length.toString(), icon: Star, color: 'text-amber-500', bg: 'bg-amber-50' },
   ];
 
   const handleAddInternship = async () => {
@@ -137,7 +135,7 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     }
   };
 
-   const handleAddProject = async () => {
+  const handleAddProject = async () => {
     if (!newProject.title || !newProject.description || !newProject.classId || newProject.studentNames!.length === 0) {
       alert("Veuillez remplir les informations du projet.");
       return;
@@ -191,8 +189,26 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     await onUpdateStudent(updatedStudent);
   };
 
+  const handleTransmitReport = async (type: string, title: string, content: string) => {
+    try {
+      await db.collection('reports').add({
+        title,
+        content,
+        type,
+        status: 'PENDING',
+        author: userName || 'Chef des Travaux',
+        authorRole: 'CT',
+        date: new Date().toISOString(),
+        timestamp: new Date()
+      });
+      alert("Demande transmise au Proviseur.");
+    } catch (e) {
+      alert("Erreur lors de la transmission.");
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[700] bg-slate-50 dark:bg-slate-950 flex flex-col font-sans overflow-hidden">
+    <div className="fixed inset-0 z-[700] bg-slate-50 dark:bg-slate-950 flex flex-col font-sans overflow-hidden text-slate-900 dark:text-slate-100">
       {/* HEADER */}
       <div className="bg-white dark:bg-slate-900 border-b border-black/5 dark:border-white/5 px-8 py-6 shrink-0 z-10 shadow-sm">
         <div className="flex items-center justify-between mx-auto max-w-7xl">
@@ -205,7 +221,8 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
             </button>
             <div>
               <h2 className="text-2xl font-black text-slate-900 dark:text-white font-display tracking-tight uppercase">
-                {activeSection === 'overview' ? 'Espace Chef des Travaux' : 'Suivi des Stages'}
+                {activeSection === 'overview' ? 'Espace Chef des Travaux' : 
+                 activeSection === 'internships' ? 'Suivi des Stages' : 'Mur de Fierté Technique'}
               </h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">Coordination Technique & Professionnelle • {userName}</p>
             </div>
@@ -257,10 +274,11 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
                       <Briefcase className="text-indigo-600" /> Actions prioritaires
                     </h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {[
                         { title: 'Plannings d\'Atelier', desc: 'Gestion de l\'occupation des salles techniques', icon: Calendar, color: 'indigo', action: onOpenManageEvents },
                         { title: 'Suivi des Stages', desc: 'Conventions et évaluations en entreprise', icon: GraduationCap, color: 'emerald', action: () => setActiveSection('internships') },
+                        { title: 'Mur de Fierté', desc: 'Mettre en avant les chefs-d\'œuvre élèves', icon: Star, color: 'amber', action: () => setActiveSection('projects') },
                         { title: 'Maintenance Préventive', desc: 'Calendrier d\'entretien des machines', icon: Settings, color: 'blue', action: onOpenAddEvent },
                         { title: 'Commandes Matières', desc: 'Besoins pour les travaux pratiques', icon: ClipboardList, color: 'amber', action: onOpenInventory },
                       ].map((item, i) => (
@@ -315,12 +333,20 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
                       </div>
                       <h3 className="text-xl font-black font-display mb-4">Urgences Ateliers</h3>
                       <p className="text-xs text-slate-400 font-medium leading-relaxed mb-6">3 machines sont actuellement en attente de maintenance critique dans la section Mécanique.</p>
-                      <button 
-                        onClick={onOpenAddEvent}
-                        className="w-full bg-white text-slate-900 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all shadow-xl"
-                      >
-                        Prendre en charge
-                      </button>
+                      <div className="space-y-2">
+                        <button 
+                          onClick={onOpenAddEvent}
+                          className="w-full bg-white text-slate-900 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all shadow-xl"
+                        >
+                          Plannifier Maintenance
+                        </button>
+                        <button 
+                          onClick={() => handleTransmitReport('TECHNIQUE', 'Urgence Maintenance Ateliers', 'Maintenance critique requise: 3 machines HS en Mécanique. Devis estimatif: 450.000 FCFA.')}
+                          className="w-full bg-amber-600/20 text-amber-500 border border-amber-500/30 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all"
+                        >
+                          Demander Budget au Proviseur
+                        </button>
+                      </div>
                   </div>
 
                   <div className="glass p-8 rounded-[2.5rem] bg-white dark:bg-white/5 border border-black/5 dark:border-white/5">
@@ -389,7 +415,7 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
                   className="bg-white dark:bg-white/5 border border-indigo-500/30 p-8 rounded-[2.5rem] shadow-2xl relative"
                 >
                   <button onClick={() => setIsAddingInternship(false)} className="absolute top-6 right-6 text-slate-400 hover:text-rose-500 transition-colors">
-                    <ArrowLeftRight className="rotate-90" size={20} />
+                    <ArrowLeft size={20} className="rotate-90" />
                   </button>
                   <h3 className="text-xl font-black font-display mb-8 lowercase flex items-center gap-3">
                     <GraduationCap className="text-indigo-600" /> Émettre une convention
@@ -539,7 +565,7 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Aucun stage trouvé</p>
                   </div>
                 )}
-               </div>
+              </div>
             </motion.div>
           ) : activeSection === 'projects' ? (
             <motion.div
@@ -722,4 +748,3 @@ export const ChefTravauxModule: React.FC<ChefTravauxModuleProps> = ({
     </div>
   );
 };
-

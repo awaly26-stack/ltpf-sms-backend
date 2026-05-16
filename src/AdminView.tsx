@@ -4,7 +4,7 @@ import {
   Shield, ShieldHalf, Plus, Layers, UserCog, Activity, UserPlus, 
   Hammer, Landmark, Gavel, Briefcase, GraduationCap, 
   ShieldCheck, Users, FileDown, ClipboardList, ChevronRight,
-  PieChart, BarChart3, TrendingUp, Clock, AlertCircle, RotateCcw, UserMinus, BookOpen, Megaphone, Settings, Share2, BookMarked
+  PieChart, BarChart3, TrendingUp, Clock, AlertCircle, RotateCcw, UserMinus, BookOpen, Megaphone, Settings, Share2, BookMarked, Video
 } from 'lucide-react';
 import { User, Role, Student, Teacher, AbsenceMotif } from './types';
 import { useAuth } from './AuthContext';
@@ -38,6 +38,7 @@ interface AdminViewProps {
  //onOpenIntendant: () => void;
   onOpenInternship: () => void;
   onOpenPedagogy: () => void;
+  onOpenMeetings: () => void;
 }
 
 const ROLE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
@@ -52,7 +53,7 @@ const ROLE_CONFIG: Record<string, { label: string, icon: any, color: string }> =
 };
 
 export const AdminView: React.FC<AdminViewProps> = ({
-   allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory,onOpenChefTravaux, onOpenDirecteurEtudes, onOpenProviseur, onOpenMedia, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters, onFixTeacherMatricules, onOpenInternship, onOpenPedagogy
+   allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory,onOpenChefTravaux, onOpenDirecteurEtudes, onOpenProviseur, onOpenMedia, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters, onFixTeacherMatricules, onOpenInternship, onOpenPedagogy, onOpenMeetings
 }) => {
   const { isSuperAdmin, isSG, currentUser } = useAuth();
    const isTeacher = (currentUser as any)?.role === 'PROFESSEUR';
@@ -208,6 +209,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
         <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em] px-2 flex items-center gap-2"><Activity size={16} /> Administration Campus</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
+           <button 
+            onClick={onOpenMeetings}
+            className="glass p-8 rounded-3xl flex items-center gap-6 border border-indigo-500/10 bg-gradient-to-br from-indigo-600/5 to-transparent group hover:bg-white dark:hover:bg-white/5 transition-all shadow-md text-left"
+          >
+            <div className="h-14 w-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Video size={24} /></div>
+            <div>
+              <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display italic">Visio-Conférence</p>
+              <p className="text-[8px] font-black text-indigo-500 uppercase tracking-widest mt-1">Réunions & Co-working</p>
+            </div>
+          </button>
            <button 
             onClick={() => {
               const userRole = (currentUser as any)?.role;

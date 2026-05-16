@@ -7,13 +7,14 @@ import {
   ClipboardList, ShieldCheck, UserPlus, Globe, Briefcase as CaseIcon,
   History, QrCode, Home, PhoneForwarded, Briefcase, 
   ChevronRight, Star, AlertOctagon, Info, FileDown, FileText,
-  MessageSquare, Landmark
+  MessageSquare, Landmark, Send
 } from 'lucide-react';
 import { jsPDF } from "jspdf";
-import { Student, SchoolClass, Subject, User, Incident, Internship, AbsenceLog } from './types';
+import { Student, SchoolClass, Subject, User, Incident, Internship, AbsenceLog,  ChatMessage  } from './types';
+import { db } from './firebaseConfig';
 import { AVAILABLE_BADGES, ADMIN_KEY } from './constants';
 import { QRCodeDisplay } from './components';
-import { sendSMS, sendAbsenceSMS } from './utils';
+import { sendSMS, sendAbsenceSMS, toPlainObject } from './utils';
 import { useAuth } from './AuthContext';
 
 export const StudentDetail = ({ student, classes, subjects, currentUser, onUpdate, onDelete, onClose, onOpenChat }: { 
@@ -57,7 +58,10 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
   }
 
   const [localStudent, setLocalStudent] = useState<Student>(student);
-  const [activeTab, setActiveTab] = useState<'vie' | 'profil' | 'qr'>('vie');
+  const [activeTab, setActiveTab] = useState<'vie' | 'profil' | 'qr'  | 'conseil'>('vie');
+   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [showAbsenceForm, setShowAbsenceForm] = useState(false);
   const [showIncidentForm, setShowIncidentForm] = useState(false);
   const [showInternshipForm, setShowInternshipForm] = useState(false);
@@ -66,6 +70,51 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
     description: '',
     severity: 'low'
   });
+   useEffect(() => {
+    if (activeTab === 'conseil') {
+      const conversationId = student.id;
+      const unsubscribe = db.collection("conseils")
+        .where("conversationId", "==", conversationId)
+        .onSnapshot((snap) => {
+          const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage));
+          msgs.sort((a, b) => (a.timestamp?.toMillis ? a.timestamp.toMillis() : new Date(a.timestamp).getTime()) - (b.timestamp?.toMillis ? b.timestamp.toMillis() : new Date(b.timestamp).getTime()));
+          setMessages(msgs);
+          
+          // Marquer comme lu si applicable
+          snap.docs.forEach(d => {
+            const data = d.data();
+            if (data.receiverId === currentUser.id && !data.read) {
+              db.collection("conseils").doc(d.id).update({ read: true });
+            }
+          });
+        });
+      return () => unsubscribe();
+    }
+  }, [activeTab, student.id, currentUser.id]);
+
+  useEffect(() => {
+    if (activeTab === 'conseil') {
+      scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, activeTab]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    const msgData = {
+      conversationId: student.id,
+      senderId: currentUser.id,
+      receiverId: currentUser.role === 'ELEVE' ? 'SURVEILLANT_OFFICE' : student.id,
+      text: newMessage.trim(),
+      timestamp: new Date(),
+      read: false,
+      senderName: currentUser.name
+    };
+
+    setNewMessage('');
+    await db.collection("conseils").add(msgData);
+  };
   const [newInternship, setNewInternship] = useState<Partial<Internship>>({
     companyName: '',
     tutorName: '',
@@ -321,6 +370,7 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
 
   const tabs = [
     { id: 'vie', icon: History, label: 'Social', visible: true },
+      { id: 'conseil', icon: MessageSquare, label: 'Conseil', visible: isStaff || isOwnProfile },
     { id: 'profil', icon: UserRound, label: 'Profil', visible: canSeeFullAccess },
     { id: 'qr', icon: QrCode, label: 'Pass', visible: canSeeFullAccess }
   ].filter(t => t.visible);
@@ -625,6 +675,61 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
                      )) : <div className="py-8 text-center glass rounded-[2rem] border-dashed border-white/10 opacity-30"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Aucun stage répertorié</p></div>}
                   </div>
                </div>
+            </div>
+          )}
+
+           {activeTab === 'conseil' && (isStaff || isOwnProfile) && (
+            <div className="flex flex-col h-[500px] glass rounded-[2.5rem] overflow-hidden border border-white/5 shadow-2xl animate-slide-up">
+              <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest pl-2">Espace de Discussion Privé</span>
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                  <span className="text-[8px] font-black uppercase text-emerald-500">Sécurisé</span>
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-slate-900/10">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-20 space-y-4">
+                    <MessageSquare size={48} />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-center">Aucun message pour le moment.<br/>Engagez la discussion.</p>
+                  </div>
+                ) : (
+                  messages.map((msg, idx) => {
+                    const isMe = msg.senderId === currentUser.id;
+                    return (
+                      <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
+                        <div className={`max-w-[85%] space-y-1`}>
+                          <div className={`px-5 py-3 rounded-2xl text-[12px] font-medium leading-relaxed shadow-lg ${isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-200 rounded-tl-none border border-white/5'}`}>{msg.text}</div>
+                          <p className={`text-[8px] font-bold text-slate-600 uppercase px-2 ${isMe ? 'text-right' : 'text-left'}`}>
+                            {msg.timestamp?.toMillis ? new Date(msg.timestamp.toMillis()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Maintenant'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={scrollRef} />
+              </div>
+
+              <form onSubmit={handleSendMessage} className="p-4 bg-slate-900/50 border-t border-white/5">
+                <div className="flex gap-2 bg-white/5 p-1.5 rounded-[1.8rem] border border-white/5 focus-within:border-indigo-500/50 transition-all">
+                  <input 
+                    type="text" 
+                    value={newMessage} 
+                    onChange={e => setNewMessage(e.target.value)} 
+                    placeholder="Conseil, convention..." 
+                    className="flex-1 bg-transparent px-5 text-[11px] font-medium text-white outline-none placeholder:text-slate-600" 
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!newMessage.trim()} 
+                    className="h-10 w-10 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-30 transition-all"
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 

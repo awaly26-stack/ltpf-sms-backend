@@ -16,7 +16,7 @@ import { Mail } from 'lucide-react';
 export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, onClose }: { 
   teacher: Teacher; subjects: Subject[]; classes: SchoolClass[]; onUpdate: (t: Teacher) => void; onDelete: (id: string) => void; onClose: () => void 
 }) => {
-   const { currentUser, isSuperAdmin, isSG, isTeacher } = useAuth();
+  const { currentUser, isSuperAdmin, isSG, isTeacher, isStaff } = useAuth();
   const isMe = currentUser?.id === teacher.id;
   
   // High management permissions
@@ -45,15 +45,15 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
   const [showEditAssignments, setShowEditAssignments] = useState(false);
   const [showEditInfo, setShowEditInfo] = useState(false);
   const [showWeeklyExport, setShowWeeklyExport] = useState(false);
+  const [showMailbox, setShowMailbox] = useState(false);
   const [selectedWeekDate, setSelectedWeekDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [newLog, setNewLog] = useState<{ hours: number; classId: string; motif: AbsenceMotif }>({
     hours: 1, 
-    classId: (localTeacher.classIds && localTeacher.classIds.length > 0) ? localTeacher.classIds[0] : (classes[0]?.id || ''), 
+    classId: (availableClassesForAbsence.length > 0) ? availableClassesForAbsence[0] : (classes[0]?.id || ''), 
     motif: 'Inconnu'
   });
 
-  const [showMailbox, setShowMailbox] = useState(false);
   const teacherSubjects = useMemo(() => {
     return (localTeacher.subjectIds || [])
       .map(sid => subjects.find(s => s.id === sid)?.name)
@@ -84,7 +84,7 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
       privateOvertimeLogs: [newOvertime, ...(localTeacher.privateOvertimeLogs || [])]
     };
     setLocalTeacher(updated);
-    onUpdate(updated); // Persistance immédiate
+    onUpdate(updated); 
   };
 
   const handleDeletePrivateOvertime = (id: string) => {
@@ -93,7 +93,7 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
       privateOvertimeLogs: (localTeacher.privateOvertimeLogs || []).filter(l => l.id !== id)
     };
     setLocalTeacher(updated);
-    onUpdate(updated); // Persistance immédiate
+    onUpdate(updated);
   };
 
   const toggleSubject = (sid: string) => {
@@ -133,6 +133,7 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
     const t = localTeacher;
     let y = 20;
     const formatDate = (d: Date) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const currentMonthStr = monday.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 
     doc.setFontSize(10).setFont("helvetica", "normal").text("RÉPUBLIQUE DU SÉNÉGAL", 105, y, { align: 'center' });
     y += 5;
@@ -143,10 +144,12 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
 
     doc.setFontSize(16).setFont("helvetica", "bold").text("RAPPORT HEBDOMADAIRE D'ABSENCES", 105, y, { align: 'center' });
     y += 8;
-    doc.setFontSize(10).setFont("helvetica", "italic").text(`Période du : ${formatDate(monday)} au ${formatDate(saturday)}`, 105, y, { align: 'center' });
+    doc.setFontSize(11).setFont("helvetica", "bold").text(`MOIS DE : ${currentMonthStr.toUpperCase()}`, 105, y, { align: 'center' });
+    y += 8;
+    doc.setFontSize(10).setFont("helvetica", "italic").text(`Semaine du : ${formatDate(monday)} au ${formatDate(saturday)}`, 105, y, { align: 'center' });
     y += 15;
 
-    doc.setFontSize(12).setFont("helvetica", "bold").text(`PROFESSEUR : ${t.firstName.toUpperCase()} ${t.name.toUpperCase()}`, 20, y);
+    doc.setFontSize(12).setFont("helvetica", "bold").text(`PROFESSEUR : ${(t.firstName || '').toUpperCase()} ${(t.name || '').toUpperCase()}`, 20, y);
     y += 15;
 
     const weeklyLogs = (t.absenceLogs || []).filter(l => {
@@ -154,22 +157,23 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
         return logDate >= monday && logDate <= new Date(saturday.getTime() + 86400000);
     });
 
-    doc.setFontSize(10).setFont("helvetica", "bold").text("DÉTAIL DES ABSENCES DE LA SEMAINE", 20, y);
-    y += 8;
+    doc.setFontSize(10).setFont("helvetica", "bold").text("DÉTAIL DES ENREGISTREMENTS", 20, y);
+    y += 6;
     doc.line(20, y, 190, y);
-    y += 8;
+    y += 10;
 
     doc.setFont("helvetica", "normal");
     if(weeklyLogs.length === 0) {
-        doc.text("Aucune absence signalée pour cette semaine.", 20, y);
+        doc.text("Aucune absence enregistrée pour cette période.", 20, y);
     } else {
         weeklyLogs.forEach(l => {
             const className = classes.find(c => c.id === l.classId)?.name || "N/A";
-            const dateStr = new Date(l.date).toLocaleDateString('fr-FR');
-            doc.text(`${dateStr} - ${l.hours}H - CLASSE : ${className.toUpperCase()}`, 20, y);
-            doc.setFont("helvetica", "italic").text(`Motif : ${l.motif}`, 150, y);
-            doc.setFont("helvetica", "normal");
-            y += 7;
+            const dateStr = new Date(l.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'numeric', year: 'numeric' });
+            doc.setFont("helvetica", "bold").text(`DATE : ${dateStr}`, 20, y);
+            doc.setFont("helvetica", "normal").text(`| CLASSE : ${className.toUpperCase()}`, 60, y);
+            doc.text(`| VOLUME : ${l.hours}H`, 120, y);
+            doc.setFont("helvetica", "italic").text(`(${l.motif})`, 160, y);
+            y += 8;
             if(y > 270) { doc.addPage(); y = 20; }
         });
     }
@@ -182,7 +186,7 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
     setShowWeeklyExport(false);
   };
 
-    const exportTeacherPDF = () => {
+  const exportTeacherPDF = () => {
     const doc = new jsPDF();
     const t = localTeacher;
     let y = 20;
@@ -240,7 +244,7 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
     doc.save(`Bilan_Absences_${t.name}_${currentMonth.replace(' ', '_')}.pdf`);
   };
 
- return (
+  return (
     <div className="fixed inset-0 z-[600] bg-white dark:bg-slate-950 flex flex-col min-h-screen animate-in slide-in-from-right duration-300 overflow-y-auto">
       <div className="px-6 py-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md sticky top-0 z-20">
         <button onClick={onClose} className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-500 rounded-2xl active:scale-90 transition-transform"><ArrowLeft size={20} /></button>
@@ -251,7 +255,7 @@ export const TeacherDetail = ({ teacher, subjects, classes, onUpdate, onDelete, 
           <p className="font-mono font-black text-amber-600 uppercase tracking-tight truncate max-w-[150px]">{localTeacher.firstName} {localTeacher.name}</p>
         </div>
         <div className="flex items-center gap-2">
-          {(canManageTeachers || isMe) && (
+          {(isStaff || isMe) && (
             <button 
               onClick={() => setShowMailbox(true)} 
               className={`p-3 rounded-2xl text-white shadow-lg active:scale-95 transition-all relative ${isMe ? 'bg-indigo-600 shadow-indigo-500/20' : 'bg-slate-800'}`}

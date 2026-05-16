@@ -306,6 +306,59 @@ export interface ExamSchedule {
   type: 'DEVOIR' | 'COMPOSITION' | 'BLANC';
 }
 
+export interface ScheduleSlot {
+  id: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  teacherId: string;
+  teacherName: string;
+  day: 'Lundi' | 'Mardi' | 'Mercredi' | 'Jeudi' | 'Vendredi' | 'Samedi';
+  startTime: string; // e.g. "08:00"
+  endTime: string;   // e.g. "10:00"
+  room: string;
+}
+
+export interface ClassCouncil {
+  id: string;
+  classId: string;
+  className: string;
+  date: string;
+  period: string;
+  president: string;
+  minutes: string;
+  decisions: string[];
+  averageGrade: number;
+}
+
+export interface ProgressionLog {
+  id: string;
+  classId: string;
+  subjectId: string;
+  teacherId: string;
+  subjectName: string;
+  teacherName: string;
+  chapterTitle: string;
+  percentage: number;
+  lastUpdated: string;
+  remarks?: string;
+}
+
+export interface OnlineMeeting {
+  id: string;
+  title: string;
+  description?: string;
+  date: string;
+  startTime: string;
+  duration: number; // in minutes
+  roomName: string; // Jitsi room name
+  status: 'UPCOMING' | 'LIVE' | 'FINISHED';
+  organizerId: string;
+  organizerName: string;
+  link: string;
+  participants: string[]; // roles or user IDs
+}
+
 export interface TechnicalProject {
   id: string;
   title: string;

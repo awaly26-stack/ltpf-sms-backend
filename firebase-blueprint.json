@@ -138,6 +138,20 @@
         "read": { "type": "boolean" }
       },
       "required": ["senderId", "recipientId", "subject", "content", "date"]
+    },
+    "ScheduleSlot": {
+      "title": "ScheduleSlot",
+      "description": "Un créneau dans l'emploi du temps d'une classe",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "day": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "room": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -152,8 +166,14 @@
     "subjects": { "schema": "object", "description": "Matières enseignées" },
     "media": { "schema": "MediaFile", "description": "Médiathèque et Rapports administratifs" },
     "private_mail": { "schema": "PrivateMail", "description": "Courrier confidentiel" },
-     "lessonLogs": { "schema": "object", "description": "Cahier de texte - Séances de cours" },
+    "lessonLogs": { "schema": "object", "description": "Cahier de texte - Séances de cours" },
     "resources": { "schema": "object", "description": "Hub Ressources pédagogiques" },
-    "exams": { "schema": "object", "description": "Planning des examens et contrôles" }
+    "exams": { "schema": "object", "description": "Planning des examens et contrôles" },
+    "conseils": { "schema": "object", "description": "Discussions privées entre surveillants et élèves" },
+    "schedules": { "schema": "ScheduleSlot", "description": "Emplois du temps hebdomadaires" },
+    "councils": { "schema": "object", "description": "Compte-rendus des conseils de classe" },
+    "progression": { "schema": "object", "description": "Suivi de l'avancement des programmes" },
+    "meetings": { "schema": "object", "description": "Sessions de visio-conférence en ligne" },
+    "reports": { "schema": "object", "description": "Rapports et demandes transmis à la Direction" }
   }
 }

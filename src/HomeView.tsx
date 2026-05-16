@@ -117,9 +117,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="h-28 w-28 rounded-[2.5rem] border-4 border-amber-500/30 p-1 relative z-10 bg-slate-900 shadow-2xl">
               <div className="h-full w-full rounded-[2rem] overflow-hidden flex items-center justify-center bg-indigo-600 font-black text-3xl">
                 {topStudent?.avatar ? (
-                  <img src={topStudent.avatar} className="h-full w-full object-cover" alt="Gaïndé" />
+                   <img src={topStudent.avatar} className="h-full w-full object-cover" alt="Gaïndé" />
                 ) : (
-                  (topStudent?.firstName || 'A')[0].toUpperCase()
+                   (topStudent?.firstName || 'A')[0].toUpperCase()
                 )}
               </div>
               {/* Badge Lion */}
