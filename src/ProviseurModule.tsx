@@ -9,9 +9,9 @@ import {
   Stamp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SchoolClass, Student, Teacher, SchoolEvent, InventoryItem, User, MediaFile, Payment } from './types';
-import { CertificateModule } from './CertificateModule';
+import { SchoolClass, Student, Teacher, SchoolEvent, InventoryItem, User, MediaFile, Payment, IssuedCertificate } from './types';
 import { db } from './firebaseConfig';
+import { CertificateModule } from './CertificateModule';
 
 interface ProviseurModuleProps {
   onClose: () => void;
@@ -23,17 +23,19 @@ interface ProviseurModuleProps {
   allStaff: User[];
   mediaFiles: MediaFile[];
   userName?: string;
+  currentUser: User;
+  onOpenSurveillance: () => void;
 }
 
 export const ProviseurModule: React.FC<ProviseurModuleProps> = ({ 
-  onClose, classes, students, teachers, events, inventory, allStaff, mediaFiles, userName 
+  onClose, classes, students, teachers, events, inventory, allStaff, mediaFiles, userName, currentUser, onOpenSurveillance
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'budget' | 'performance'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'budget' | 'performance' | 'certificates'>('overview');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSignModal, setShowSignModal] = useState<string | null>(null);
-   const [isCertificatesOpen, setIsCertificatesOpen] = React.useState(false);
+  const [isCertificatesOpen, setIsCertificatesOpen] = useState(false);
 
   useEffect(() => {
     const unsubPayments = db.collection('payments')
@@ -84,6 +86,7 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
     { label: 'Effectif Global', val: students.length.toString(), icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { label: 'Corps Enseignant', val: teachers.length.toString(), icon: GraduationCap, color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'Ressources (Immo)', val: inventory.length.toString(), icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Occupation Salles', val: 'Surveillance', icon: Activity, color: 'text-rose-600', bg: 'bg-rose-50', action: onOpenSurveillance },
     { label: 'Budget Recouvré', val: financialStats.total.toLocaleString() + ' F', icon: Landmark, color: 'text-amber-600', bg: 'bg-amber-50' },
   ];
 
@@ -124,7 +127,8 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
              { id: 'overview', label: 'Vue d\'ensemble', icon: PieChart },
              { id: 'budget', label: 'Budget & Finance', icon: Wallet },
              { id: 'performance', label: 'KPI & Performance', icon: Activity },
-             { id: 'reports', label: 'Rapports & Archives', icon: FileText }
+             { id: 'reports', label: 'Rapports & Archives', icon: FileText },
+             { id: 'certificates', label: 'Certificats', icon: FileCheck }
            ].map(tab => (
              <button 
               key={tab.id}
@@ -151,7 +155,7 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
               {/* STATS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {stats.map((s, i) => (
-                  <div key={i} className="glass group p-6 rounded-[2.5rem] bg-white dark:bg-white/5 border border-black/5 dark:border-white/5 shadow-sm hover:shadow-xl transition-all">
+                  <div key={i} onClick={(s as any).action} className={`glass group p-6 rounded-[2.5rem] bg-white dark:bg-white/5 border border-black/5 dark:border-white/5 shadow-sm hover:shadow-xl transition-all ${(s as any).action ? 'cursor-pointer' : ''}`}>
                     <div className={`h-12 w-12 ${s.bg} ${s.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
                       <s.icon size={24} />
                     </div>
@@ -178,13 +182,6 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
                       >
                         Archives →
                       </button>
-                      <button 
-            onClick={() => setIsCertificatesOpen(true)}
-            className="w-full flex items-center gap-4 p-5 rounded-[2rem] text-slate-400 hover:bg-white/5 transition-all text-left"
-          >
-            <FileCheck size={20} className="text-indigo-400" />
-            <span className="text-xs font-black uppercase tracking-wider">Certificats</span>
-          </button>
                     </div>
                     
                     <div className="space-y-4">
@@ -540,6 +537,22 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
                     </tbody>
                  </table>
               </div>
+            </motion.div>
+          ) : activeTab === 'certificates' ? (
+            <motion.div
+              key="certificates"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="h-full"
+            >
+              <CertificateModule 
+                onClose={() => setActiveTab('overview')} 
+                students={students} 
+                allStaff={allStaff}
+                classes={classes} 
+                currentUser={{ id: currentUser.id, name: currentUser.name, role: currentUser.role }} 
+              />
             </motion.div>
           ) : null}
         </AnimatePresence>

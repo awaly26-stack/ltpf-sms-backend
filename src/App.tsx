@@ -27,6 +27,7 @@ import { MediaModule } from './MediaModule';
 import { InternshipModule } from './InternshipModule';
 import { PedagogyModule } from './PedagogyModule';
 import { OnlineMeetingModule } from './OnlineMeetingModule';
+import { SurveillanceModule } from './SurveillanceModule';
 
 import { useAuth } from './AuthContext';
 import { Header } from './Header';
@@ -85,7 +86,8 @@ const App: React.FC = () => {
  //const [isIntendantOpen, setIsIntendantOpen] = useState(false);
   const [isInternshipOpen, setIsInternshipOpen] = useState(false);
   const [isPedagogyOpen, setIsPedagogyOpen] = useState(false);
-   const [isMeetingsOpen, setIsMeetingsOpen] = useState(false);
+  const [isMeetingsOpen, setIsMeetingsOpen] = useState(false);
+  const [isSurveillanceOpen, setIsSurveillanceOpen] = useState(false);
   const [isExportAbsencesOpen, setIsExportAbsencesOpen] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(false);
 
@@ -716,7 +718,7 @@ const App: React.FC = () => {
          <main className="flex-1 overflow-y-auto px-6 pb-32">
         {activeTab === 'home' && <HomeView events={events} mediaFiles={mediaFiles} students={students} classes={classes} studentStats={studentStats} onNavigateToAdmin={() => setActiveTab('admin')} onOpenStudentProfile={setSelectedStudentId} onOpenTeacherProfile={setSelectedTeacherId} onOpenStaffProfile={setSelectedStaffId} onUpdateStudent={handleUpdateStudent} onLikeEvent={handleLikeEvent} onOpenComments={setSelectedEventForComments} />}
         {activeTab === 'list' && <CampusView students={filteredStudents} teachers={teachers} classes={classes} allStaff={allStaff} searchQuery={searchQuery} setSearchQuery={setSearchQuery} selectedClassFilter={selectedClassFilter} setSelectedClassFilter={setSelectedClassFilter} onSelectStudent={setSelectedStudentId} onSelectTeacher={setSelectedTeacherId} onSelectStaff={setSelectedStaffId} onPresenceChange={handlePresence} />}
-       {activeTab === 'admin' && isStaff && <AdminView allStaff={allStaff} students={students} teachers={teachers} onSelectStaff={setSelectedStaffId} onOpenAddStaff={() => setIsAddStaffOpen(true)} onOpenAddStudent={() => setIsAddStudentOpen(true)} onOpenAddTeacher={() => setIsAddTeacherOpen(true)} onOpenAddEvent={() => setIsAddEventOpen(true)} onOpenManageEvents={() => setIsManageEventsOpen(true)} onOpenManageClasses={() => setIsManageClassesOpen(true)} onOpenManageSubjects={() => setIsManageSubjectsOpen(true)} onOpenInventory={() => setIsInventoryOpen(true)} onOpenChefTravaux={() => setIsChefTravauxOpen(true)} onOpenDirecteurEtudes={() => setIsDirecteurEtudesOpen(true)} onOpenProviseur={() => setIsProviseurOpen(true)} onOpenMedia={() => setIsMediaOpen(true)} onOpenIntendant={() => setIsIntendantOpen(true)} onOpenInternship={() => setIsInternshipOpen(true)} onOpenPedagogy={() => setIsPedagogyOpen(true)} onOpenMeetings={() => setIsMeetingsOpen(true)} onOpenExportAbsences={() => setIsExportAbsencesOpen(true)} onOpenExportTeacherAbsences={generateTeachersBilanPDF} onOpenExportWeeklyTeacherAbsences={generateWeeklyTeachersBilanPDF} onOpenManageStaff={() => setIsManageStaffOpen(true)} onOpenManageTeachers={() => setIsManageTeachersOpen(true)} onFixTeacherMatricules={handleFixTeacherMatricules} onResetCounters={handleResetAllAbsences} onResetTeacherCounters={handleResetTeacherAbsences} />}
+       {activeTab === 'admin' && isStaff && <AdminView allStaff={allStaff} students={students} teachers={teachers} onSelectStaff={setSelectedStaffId} onOpenAddStaff={() => setIsAddStaffOpen(true)} onOpenAddStudent={() => setIsAddStudentOpen(true)} onOpenAddTeacher={() => setIsAddTeacherOpen(true)} onOpenAddEvent={() => setIsAddEventOpen(true)} onOpenManageEvents={() => setIsManageEventsOpen(true)} onOpenManageClasses={() => setIsManageClassesOpen(true)} onOpenManageSubjects={() => setIsManageSubjectsOpen(true)} onOpenInventory={() => setIsInventoryOpen(true)} onOpenChefTravaux={() => setIsChefTravauxOpen(true)} onOpenDirecteurEtudes={() => setIsDirecteurEtudesOpen(true)} onOpenProviseur={() => setIsProviseurOpen(true)} onOpenMedia={() => setIsMediaOpen(true)} onOpenIntendant={() => setIsIntendantOpen(true)} onOpenInternship={() => setIsInternshipOpen(true)} onOpenPedagogy={() => setIsPedagogyOpen(true)} onOpenMeetings={() => setIsMeetingsOpen(true)}  onOpenSurveillance={() => setIsSurveillanceOpen(true)} onOpenExportAbsences={() => setIsExportAbsencesOpen(true)} onOpenExportTeacherAbsences={generateTeachersBilanPDF} onOpenExportWeeklyTeacherAbsences={generateWeeklyTeachersBilanPDF} onOpenManageStaff={() => setIsManageStaffOpen(true)} onOpenManageTeachers={() => setIsManageTeachersOpen(true)} onFixTeacherMatricules={handleFixTeacherMatricules} onResetCounters={handleResetAllAbsences} onResetTeacherCounters={handleResetTeacherAbsences} />}
         {activeTab === 'chat' && <Messaging currentUser={currentUser} students={students} targetStudentId={chatWithStudentId} onClose={() => setActiveTab('home')} />}
       </main>
 
@@ -1098,6 +1100,17 @@ const App: React.FC = () => {
           onUpload={handleUploadMedia}
           onDelete={handleDeleteMedia}
           currentUser={currentUser}
+        />
+      )}
+       {isSurveillanceOpen && (
+        <SurveillanceModule 
+          onClose={() => setIsSurveillanceOpen(false)}
+          classes={classes}
+          students={students}
+          teachers={teachers}
+          allStaff={allStaff}
+          subjects={subjects}
+          currentUser={currentUser!}
         />
       )}
 

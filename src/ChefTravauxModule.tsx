@@ -23,6 +23,7 @@ interface ChefTravauxModuleProps {
   students: Student[];
   technicalProjects?: TechnicalProject[];
   onUpdateStudent: (student: Student) => Promise<void>;
+   onOpenSurveillance: () => void;
   userRole?: string;
   userName?: string;
 }

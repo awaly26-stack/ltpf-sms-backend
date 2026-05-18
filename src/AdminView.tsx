@@ -39,6 +39,7 @@ interface AdminViewProps {
   onOpenInternship: () => void;
   onOpenPedagogy: () => void;
   onOpenMeetings: () => void;
+   onOpenSurveillance: () => void;
 }
 
 const ROLE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
@@ -53,7 +54,7 @@ const ROLE_CONFIG: Record<string, { label: string, icon: any, color: string }> =
 };
 
 export const AdminView: React.FC<AdminViewProps> = ({
-   allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory,onOpenChefTravaux, onOpenDirecteurEtudes, onOpenProviseur, onOpenMedia, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters, onFixTeacherMatricules, onOpenInternship, onOpenPedagogy, onOpenMeetings
+   allStaff, students, teachers, onSelectStaff, onOpenAddStaff, onOpenAddStudent, onOpenAddTeacher, onOpenAddEvent, onOpenManageEvents, onOpenManageClasses, onOpenManageSubjects, onOpenInventory,onOpenChefTravaux, onOpenDirecteurEtudes, onOpenProviseur, onOpenMedia, onOpenExportAbsences, onOpenExportTeacherAbsences, onOpenExportWeeklyTeacherAbsences, onOpenManageStaff, onOpenManageTeachers, onResetCounters, onResetTeacherCounters, onFixTeacherMatricules, onOpenInternship, onOpenPedagogy, onOpenMeetings,  onOpenSurveillance
 }) => {
   const { isSuperAdmin, isSG, currentUser } = useAuth();
    const isTeacher = (currentUser as any)?.role === 'PROFESSEUR';
@@ -252,6 +253,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <div>
                <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display">Médiathèque & Rapports</p>
                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1 font-display">Partage de documents</p>
+            </div>
+          </button>
+          
+          <button 
+            onClick={onOpenSurveillance}
+            className="glass p-8 rounded-3xl flex items-center gap-6 border border-indigo-500/10 bg-gradient-to-br from-indigo-500/10 to-transparent group hover:bg-white dark:hover:bg-white/5 transition-all shadow-md text-left"
+          >
+            <div className="h-14 w-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Activity size={24} /></div>
+            <div>
+              <p className="text-sm font-bold uppercase text-slate-900 dark:text-white font-display italic">Surveillance & Salles</p>
+              <p className="text-[8px] font-black text-indigo-500 uppercase tracking-widest mt-1">Affectations & Occupation</p>
             </div>
           </button>
 

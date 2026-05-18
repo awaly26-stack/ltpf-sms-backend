@@ -1,50 +1,78 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
-export default defineConfig(({ mode }) => {
-  // On charge les variables d'environnement
-  const env = loadEnv(mode, process.cwd(), '');
+export default defineConfig({
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+  },
 
-  return {
-    server: {
-      port: 3000,
-      host: '0.0.0.0',
-    },
-    plugins: [
-      react(),
-      VitePWA({
-        registerType: 'autoUpdate',
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*$/,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'firestore-data',
-                expiration: {
-                  maxEntries: 50,
-                  maxAgeSeconds: 60 * 60 * 24,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+  plugins: [
+    react(),
+
+    VitePWA({
+      registerType: 'autoUpdate',
+
+      workbox: {
+        // ✅ FIX erreur 2MB
+        maximumFileSizeToCacheInBytes: 3000000,
+
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*$/,
+            handler: 'NetworkFirst',
+
+            options: {
+              cacheName: 'firestore-data',
+
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24,
+              },
+
+              cacheableResponse: {
+                statuses: [0, 200],
               },
             },
-          ],
-        },
-       
-      }),
-    ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+          },
+        ],
+      },
+    }),
+  ],
+
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
     },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, './src'),
+  },
+
+  // ✅ OPTIMISATION GROS BUNDLE
+  build: {
+    chunkSizeWarningLimit: 3000,
+
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          firebase: [
+            'firebase/app',
+            'firebase/auth',
+            'firebase/firestore',
+          ],
+
+          pdf: ['jspdf'],
+
+          reactvendor: [
+            'react',
+            'react-dom',
+          ],
+
+          icons: ['lucide-react'],
+        },
       },
     },
-  };
+  },
 });

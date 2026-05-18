@@ -207,12 +207,14 @@ export interface Payment {
   receiptUrl?: string;
 }
 
-export type CertificateType = 'SCOLARITE' | 'REUSSITE' | 'BONNE_CONDUITE' | 'ASSIDUITE';
+export type CertificateType = 'SCOLARITE' | 'REUSSITE' | 'BONNE_CONDUITE' | 'ASSIDUITE' | 'PRISE_SERVICE' | 'SERVICE_FAIT' | 'CESSATION_SERVICE';
 
 export interface IssuedCertificate {
   id: string;
-  studentId: string;
-  studentName: string;
+  studentId?: string;
+  staffId?: string;
+  studentName: string; // Keeping for compatibility, but will use recipientName for staff
+  recipientName?: string;
   type: CertificateType;
   issueDate: string;
   expiryDate?: string;
@@ -380,6 +382,46 @@ export interface User {
   assignedClassIds?: string[];
   firebaseUid?: string;
   matricule?: string;
+}
+
+export type RoomType = 'NORMALE' | 'ATELIER' | 'HALL_TP' | 'SPECIALISEE';
+export type RoomStatus = 'FREE' | 'OCCUPIED' | 'MAINTENANCE';
+
+export interface Room {
+  id: string;
+  name: string;
+  type: RoomType;
+  capacity: number;
+  building: string;
+  status: RoomStatus;
+  workshopId?: string; // If linked to an atelier
+  currentClassId?: string;
+  currentTeacherId?: string;
+  lastUpdate: string;
+}
+
+export interface Workshop {
+  id: string;
+  name: string;
+  hallTpId: string;
+  pedagogicRoomIds: string[]; // 2 rooms
+  description?: string;
+}
+
+export interface RoomAssignment {
+  id: string;
+  roomId: string;
+  classId: string;
+  className: string;
+  teacherId: string;
+  teacherName: string;
+  subjectId: string;
+  subjectName: string;
+  day: 'Lundi' | 'Mardi' | 'Mercredi' | 'Jeudi' | 'Vendredi' | 'Samedi';
+  startTime: string;
+  endTime: string;
+  type: 'COURS' | 'TP' | 'EXAMEN' | 'REUNION';
+  repetitive: boolean;
 }
 
 export type MediaCategory = 'RAPPORT' | 'ACTUALITE' | 'DOCUMENT_PEDAGOGIQUE' | 'ADMINISTRATION' | 'PROJECTS';
