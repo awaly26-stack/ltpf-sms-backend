@@ -10,7 +10,7 @@ import {
   MessageSquare, Landmark, Send
 } from 'lucide-react';
 import { jsPDF } from "jspdf";
-import { Student, SchoolClass, Subject, User, Incident, Internship, AbsenceLog,  ChatMessage  } from './types';
+import { Student, SchoolClass, Subject, User, Incident, Internship, AbsenceLog,  ChatMessage, Company  } from './types';
 import { db } from './firebaseConfig';
 import { AVAILABLE_BADGES, ADMIN_KEY } from './constants';
 import { QRCodeDisplay } from './components';
@@ -64,7 +64,8 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAbsenceForm, setShowAbsenceForm] = useState(false);
   const [showIncidentForm, setShowIncidentForm] = useState(false);
-  const [showInternshipForm, setShowInternshipForm] = useState(false);
+  const [internshipsFromCollection, setInternshipsFromCollection] = useState<Internship[]>([]);
+  const [availableCompanies, setAvailableCompanies] = useState<Company[]>([]);
   const [absenceHoursToAdd, setAbsenceHoursToAdd] = useState(1);
   const [newIncident, setNewIncident] = useState<Partial<Incident>>({
     description: '',
@@ -91,6 +92,24 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
       return () => unsubscribe();
     }
   }, [activeTab, student.id, currentUser.id]);
+
+   useEffect(() => {
+    const unsubInternships = db.collection('internships')
+      .where('studentId', '==', student.id)
+      .onSnapshot(snap => {
+        setInternshipsFromCollection(snap.docs.map(d => ({ id: d.id, ...d.data() } as Internship)));
+      });
+    
+    const unsubCompanies = db.collection('companies')
+      .onSnapshot(snap => {
+        setAvailableCompanies(snap.docs.map(d => ({ id: d.id, ...d.data() } as Company)));
+      });
+
+    return () => {
+      unsubInternships();
+      unsubCompanies();
+    };
+  }, [student.id]);
 
   useEffect(() => {
     if (activeTab === 'conseil') {
@@ -212,24 +231,35 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
     setLocalStudent(updated);
   };
 
-  const handleAddInternship = () => {
+  const handleAddInternship = async () => {
     if (!canEditPersonalInfo) return;
     if (!newInternship.companyName || !newInternship.startDate) return;
-    const internship: Internship = {
-      id: Math.random().toString(36).substr(2, 9),
+    
+    const selectedCompany = availableCompanies.find(c => c.name === newInternship.companyName);
+
+    const internshipData = {
       studentId: localStudent.id,
-      companyName: newInternship.companyName!,
+      studentName: `${localStudent.firstName} ${localStudent.name}`,
+      classId: localStudent.classId,
+      companyId: selectedCompany?.id || '',
+      companyName: newInternship.companyName,
       tutorName: newInternship.tutorName || 'À préciser',
-      startDate: newInternship.startDate!,
+      startDate: newInternship.startDate,
       endDate: newInternship.endDate || '',
-      status: (newInternship.status as any) || 'A venir',
-      adminKey: ADMIN_KEY
+      status: newInternship.status || 'A venir',
+      adminKey: ADMIN_KEY,
+      createdAt: new Date().toISOString()
     };
-    const updatedInternships = [...(localStudent.internships || []), internship];
-    const updated = { ...localStudent, internships: updatedInternships };
-    setLocalStudent(updated);
+
+    await db.collection('internships').add(toPlainObject(internshipData));
+    
     setNewInternship({ companyName: '', tutorName: '', startDate: '', endDate: '', status: 'A venir' });
     setShowInternshipForm(false);
+  };
+
+  const handleDeleteInternship = async (internshipId: string) => {
+    if (!canEditPersonalInfo || !window.confirm("Voulez-vous supprimer ce stage ?")) return;
+    await db.collection('internships').doc(internshipId).delete();
   };
 
   const toggleBadge = (badgeLabel: string) => {
@@ -648,33 +678,145 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
                   </button>
                </div>
                <div className="space-y-6">
-                  <div className="flex items-center justify-between px-2">
-                    <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2"><CaseIcon size={14}/> Parcours en Entreprise</h4>
-                    {canEditPersonalInfo && <button onClick={() => setShowInternshipForm(!showInternshipForm)} className="p-2 glass text-indigo-400 rounded-xl active:scale-90 transition-all"><Plus size={16} /></button>}
+                   <div className="flex items-center justify-between px-2">
+                     <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2"><CaseIcon size={14}/> Parcours en Entreprise</h4>
+                     {canEditPersonalInfo && (
+                       <button 
+                        onClick={() => setShowInternshipForm(!showInternshipForm)} 
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all shadow-lg ${showInternshipForm ? 'bg-rose-500/10 text-rose-500' : 'bg-indigo-600 text-white'}`}
+                       >
+                         {showInternshipForm ? <X size={14}/> : <Plus size={14} />} {showInternshipForm ? 'Annuler' : 'Ajouter un Stage'}
+                       </button>
+                     )}
+                   </div>
+                   {showInternshipForm && (
+                     <div className="glass p-6 rounded-[2.5rem] border-indigo-500/20 space-y-4 animate-slide-up shadow-2xl">
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black text-indigo-400 uppercase ml-2 tracking-widest">Entreprise d'accueil</label>
+                           <select 
+                             value={newInternship.companyName} 
+                             onChange={e => setNewInternship({...newInternship, companyName: e.target.value})} 
+                             className="w-full bg-white/5 p-4 rounded-2xl text-xs font-black text-white outline-none border border-white/5"
+                           >
+                             <option value="" className="bg-slate-900 text-slate-500 italic">-- Choisir une entreprise --</option>
+                             {availableCompanies.map(c => (
+                               <option key={c.id} value={c.name} className="bg-slate-900 text-white font-bold uppercase">{c.name}</option>
+                             ))}
+                             <option value="Autre" className="bg-slate-900 text-amber-500 font-bold uppercase">-- Autre (entrer manuellement) --</option>
+                           </select>
+                        </div>
+
+                        {(newInternship.companyName === 'Autre' || !availableCompanies.some(c => c.name === newInternship.companyName)) && newInternship.companyName !== '' && (
+                          <input 
+                           type="text" 
+                           placeholder="Nom de l'entreprise..." 
+                           onChange={e => setNewInternship({...newInternship, companyName: e.target.value})} 
+                           className="w-full bg-white/5 p-4 rounded-2xl text-xs font-black text-white outline-none border border-amber-500/30" 
+                          />
+                        )}
+
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="space-y-2">
+                             <label className="text-[9px] font-black text-slate-500 uppercase ml-2 tracking-widest">Date Début</label>
+                             <input type="date" value={newInternship.startDate} onChange={e => setNewInternship({...newInternship, startDate: e.target.value})} className="w-full bg-white/5 p-4 rounded-2xl text-xs font-black text-white outline-none border border-white/5" />
+                           </div>
+                           <div className="space-y-2">
+                             <label className="text-[9px] font-black text-slate-500 uppercase ml-2 tracking-widest">Date Fin</label>
+                             <input type="date" value={newInternship.endDate} onChange={e => setNewInternship({...newInternship, endDate: e.target.value})} className="w-full bg-white/5 p-4 rounded-2xl text-xs font-black text-white outline-none border border-white/5" />
+                           </div>
+                        </div>
+
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black text-slate-500 uppercase ml-2 tracking-widest">Tuteur industriel</label>
+                           <input type="text" placeholder="Prénom Nom du tuteur..." value={newInternship.tutorName} onChange={e => setNewInternship({...newInternship, tutorName: e.target.value})} className="w-full bg-white/5 p-4 rounded-2xl text-xs font-black text-white outline-none border border-white/5" />
+                        </div>
+
+                        <button onClick={handleAddInternship} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">Inscrire le Stage</button>
+                     </div>
+                   )}
+                   <div className="grid grid-cols-1 gap-4">
+                      {internshipsFromCollection.length ? internshipsFromCollection.map(intern => (
+                        <div key={intern.id} className="glass p-6 rounded-[2.5rem] border-white/5 space-y-4 hover:bg-white/5 transition-all group">
+                           <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-4">
+                                 <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600/10 transition-all"><Building size={20} /></div>
+                                 <div>
+                                    <p className="text-sm font-black text-white uppercase leading-none">{intern.companyName}</p>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase mt-1 italic">Tuteur : {intern.tutorName}</p>
+                                 </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                 <span className={`px-3 py-1 rounded-full text-[7px] font-black uppercase ${intern.status === 'TERMINÉ' || intern.status === 'Terminé' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-amber-500/20 text-amber-500'}`}>{intern.status}</span>
+                                 {canEditPersonalInfo && (
+                                   <button onClick={() => handleDeleteInternship(intern.id)} className="p-2 text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity active:scale-90"><Trash2 size={14}/></button>
+                                 )}
+                              </div>
+                           </div>
+                           <div className="flex items-center gap-3 px-1">
+                              <div className="flex flex-col">
+                                 <span className="text-[8px] font-black text-slate-600 uppercase">Période</span>
+                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{intern.startDate} {"→"} {intern.endDate || '...'}</span>
+                              </div>
+                           </div>
+                        </div>
+                      )) : <div className="py-8 text-center glass rounded-[2rem] border-dashed border-white/10 opacity-30"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Aucun stage répertorié</p></div>}
+                   </div>
+                </div>
+            </div>
+          )}
+
+          {activeTab === 'conseil' && (isStaff || isOwnProfile) && (
+            <div className="flex flex-col h-[500px] glass rounded-[2.5rem] overflow-hidden border border-white/5 shadow-2xl animate-slide-up">
+              <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest pl-2">Espace de Discussion Privé</span>
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                  <span className="text-[8px] font-black uppercase text-emerald-500">Sécurisé</span>
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-slate-900/10">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-20 space-y-4">
+                    <MessageSquare size={48} />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-center">Aucun message pour le moment.<br/>Engagez la discussion.</p>
                   </div>
-                  {showInternshipForm && (
-                    <div className="glass p-6 rounded-[2.5rem] border-indigo-500/20 space-y-4 animate-slide-up shadow-2xl">
-                       <input type="text" placeholder="Entreprise d'accueil..." value={newInternship.companyName} onChange={e => setNewInternship({...newInternship, companyName: e.target.value})} className="w-full bg-white/5 p-4 rounded-2xl text-xs font-black text-white outline-none border border-white/5" />
-                       <button onClick={handleAddInternship} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Inscrire le Stage</button>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 gap-4">
-                     {localStudent.internships?.length ? localStudent.internships.map(intern => (
-                       <div key={intern.id} className="glass p-6 rounded-[2.5rem] border-white/5 space-y-4 hover:bg-white/5 transition-all">
-                          <div className="flex justify-between items-start">
-                             <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-indigo-400"><Building size={20} /></div>
-                                <div>
-                                   <p className="text-sm font-black text-white uppercase leading-none">{intern.companyName}</p>
-                                   <p className="text-[9px] font-bold text-slate-500 uppercase mt-1">Tuteur : {intern.tutorName}</p>
-                                </div>
-                             </div>
-                             <span className={`px-3 py-1 rounded-full text-[7px] font-black uppercase ${intern.status === 'Terminé' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-amber-500/20 text-amber-500'}`}>{intern.status}</span>
-                          </div>
-                       </div>
-                     )) : <div className="py-8 text-center glass rounded-[2rem] border-dashed border-white/10 opacity-30"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Aucun stage répertorié</p></div>}
-                  </div>
-               </div>
+                ) : (
+                  messages.map((msg, idx) => {
+                    const isMe = msg.senderId === currentUser.id;
+                    return (
+                      <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
+                        <div className={`max-w-[85%] space-y-1`}>
+                          <div className={`px-5 py-3 rounded-2xl text-[12px] font-medium leading-relaxed shadow-lg ${isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-200 rounded-tl-none border border-white/5'}`}>{msg.text}</div>
+                          <p className={`text-[8px] font-bold text-slate-600 uppercase px-2 ${isMe ? 'text-right' : 'text-left'}`}>
+                            {msg.timestamp?.toMillis ? new Date(msg.timestamp.toMillis()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Maintenant'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={scrollRef} />
+              </div>
+
+              <form onSubmit={handleSendMessage} className="p-4 bg-slate-900/50 border-t border-white/5">
+                <div className="flex gap-2 bg-white/5 p-1.5 rounded-[1.8rem] border border-white/5 focus-within:border-indigo-500/50 transition-all">
+                  <input 
+                    type="text" 
+                    value={newMessage} 
+                    onChange={e => setNewMessage(e.target.value)} 
+                    placeholder="Conseil, convention..." 
+                    className="flex-1 bg-transparent px-5 text-[11px] font-medium text-white outline-none placeholder:text-slate-600" 
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!newMessage.trim()} 
+                    className="h-10 w-10 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-30 transition-all"
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 

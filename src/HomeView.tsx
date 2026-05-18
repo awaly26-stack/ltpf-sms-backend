@@ -137,10 +137,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="h-px flex-1 bg-amber-500/20"></div>
             </div>
             
-            <h3 className="text-2xl font-black uppercase leading-tight">
-              {topStudent?.firstName || 'Avenir'} <br/> 
-              <span className="text-amber-500">{topStudent?.name || 'Proche'}</span>
-            </h3>
+           <h3 className="text-2xl font-black uppercase leading-tight">
+          <span className="text-amber-500">
+            {topStudent?.firstName || 'Avenir'}
+          </span>
+          <br/>
+          <span className="text-amber-500">
+           {topStudent?.name || 'Proche'}
+         </span>
+        </h3>
             
             <div className="flex items-center gap-3 mt-4">
               <div className="px-3 py-1 bg-white/10 rounded-full border border-white/5 flex items-center gap-2">

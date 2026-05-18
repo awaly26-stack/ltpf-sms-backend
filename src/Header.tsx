@@ -16,7 +16,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
       <div className="flex items-center gap-3">
         <Landmark className="text-indigo-500" size={24} />
         <div>
-          <h2 className="text-sm font-black text-white uppercase leading-tight">LTP Fatick</h2>
+          <h2 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight font-display">LTP Fatick</h2>
           {currentUser && (
             <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-0.5">
               {currentUser.name}
