@@ -680,7 +680,6 @@ if (loading) {
               <CertificateModule 
                 onClose={() => setActiveTab('overview')} 
                 students={students} 
-                allStaff={allStaff}
                 classes={classes} 
                 currentUser={{ id: currentUser.id, name: currentUser.name, role: currentUser.role }} 
               />

@@ -17,7 +17,7 @@ interface CertificateModuleProps {
  currentUser: { id: string; name: string; role: Role };
 }
 
-export const CertificateModule: React.FC<CertificateModuleProps> = ({ onClose, students, classes, currentUser }) => {
+export const CertificateModule: React.FC<CertificateModuleProps> = ({ onClose, students, classes, currentUser, }: CertificateModuleProps) => {
   const [issuedCertificates, setIssuedCertificates] = useState<IssuedCertificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,17 +55,19 @@ export const CertificateModule: React.FC<CertificateModuleProps> = ({ onClose, s
     const uniqueCode = `LTPF-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`;
 
     const certData: Omit<IssuedCertificate, 'id'> = {
-      studentId: student.id,
-      studentName: `${student.firstName} ${student.name}`,
-      type: newCert.type,
-      issueDate: new Date().toISOString(),
-      expiryDate: newCert.expiryDate || undefined,
-      issuerId: currentUser.id,
-      issuerName: currentUser.name,
-      issuerRole: currentUser.role,
-      uniqueCode,
-      status: 'VALIDE'
-    };
+  studentId: student.id,
+  studentName: `${student.firstName} ${student.name}`,
+  type: newCert.type,
+  issueDate: new Date().toISOString(),
+  expiryDate: newCert.expiryDate || undefined,
+
+  issuerId: safeUser.id,
+  issuerName: safeUser.name,
+  issuerRole: safeUser.role,
+
+  uniqueCode,
+  status: 'VALIDE'
+};
 
     try {
       await addDoc(collection(db, 'certificates'), toPlainObject(certData));

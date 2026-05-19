@@ -1006,19 +1006,22 @@ const App: React.FC = () => {
         </div>
       </Modal>
 
-       {isProviseurOpen && (
-        <ProviseurModule 
-          onClose={() => setIsProviseurOpen(false)}
-          classes={classes}
-          students={students}
-          teachers={teachers}
-          events={events}
-          inventory={inventory}
-          allStaff={allStaff}
-          mediaFiles={mediaFiles}
-          userName={currentUser?.name}
-        />
-      )}
+       {isProviseurOpen && currentUser && (
+          <ProviseurModule 
+            onClose={() => setIsProviseurOpen(false)}
+            classes={classes}
+            students={students}
+            teachers={teachers}
+            events={events}
+            inventory={inventory}
+            allStaff={allStaff}
+            mediaFiles={mediaFiles}
+            onOpenSurveillance={() => setIsSurveillanceOpen(true)}
+            userName={currentUser.name}
+            currentUser={currentUser}
+          />
+        )}
+
        {isInventoryOpen && (
         <InventoryModule 
           items={inventory}
