@@ -14,7 +14,7 @@ interface CertificateModuleProps {
   onClose: () => void;
   students: Student[];
   classes: SchoolClass[];
-  currentUser: { id: string; name: string; role: Role };
+ currentUser: { id: string; name: string; role: Role };
 }
 
 export const CertificateModule: React.FC<CertificateModuleProps> = ({ onClose, students, classes, currentUser }) => {
@@ -23,6 +23,11 @@ export const CertificateModule: React.FC<CertificateModuleProps> = ({ onClose, s
   const [searchQuery, setSearchQuery] = useState('');
   const [showIssueForm, setShowIssueForm] = useState(false);
   const [previewCert, setPreviewCert] = useState<IssuedCertificate | null>(null);
+  const safeUser = currentUser ?? {
+  id: '',
+  name: 'Unknown',
+  role: 'ADMIN'
+};
 
   // New Certificate Form State
   const [newCert, setNewCert] = useState({
@@ -83,7 +88,7 @@ export const CertificateModule: React.FC<CertificateModuleProps> = ({ onClose, s
     c.studentName.toLowerCase().includes(searchQuery.toLowerCase()) || 
     c.uniqueCode.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
+  
   return (
     <div className="fixed inset-0 z-[600] bg-slate-950 flex flex-col animate-in fade-in duration-300">
       {/* Header */}

@@ -150,7 +150,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="flex items-center gap-3 mt-4">
               <div className="px-3 py-1 bg-white/10 rounded-full border border-white/5 flex items-center gap-2">
                 <Users size={12} className="text-indigo-400" />
-                <span className="text-[8px] font-black uppercase tracking-widest">{topStudentClass?.name || 'Excellence'}</span>
+                <span className="text-[8px] font-black uppercase tracking-widest  text-amber-300">{topStudentClass?.name || 'Excellence'}</span>
               </div>
               <div className="px-3 py-1 bg-amber-500/20 rounded-full border border-amber-500/20 flex items-center gap-2">
                 <Award size={12} className="text-amber-500" />

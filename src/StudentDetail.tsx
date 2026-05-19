@@ -64,6 +64,7 @@ const { isSuperAdmin, isSG, isTeacher } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showAbsenceForm, setShowAbsenceForm] = useState(false);
   const [showIncidentForm, setShowIncidentForm] = useState(false);
+  const [showInternshipForm, setShowInternshipForm] = useState(false);
   const [internshipsFromCollection, setInternshipsFromCollection] = useState<Internship[]>([]);
   const [availableCompanies, setAvailableCompanies] = useState<Company[]>([]);
   const [absenceHoursToAdd, setAbsenceHoursToAdd] = useState(1);

@@ -9,6 +9,9 @@ import {
   Stamp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { jsPDF } from "jspdf";
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import { SchoolClass, Student, Teacher, SchoolEvent, InventoryItem, User, MediaFile, Payment, IssuedCertificate } from './types';
 import { db } from './firebaseConfig';
 import { CertificateModule } from './CertificateModule';
@@ -24,11 +27,12 @@ interface ProviseurModuleProps {
   mediaFiles: MediaFile[];
   userName?: string;
   currentUser: User;
+  onOpenInventory?: () => void;
   onOpenSurveillance: () => void;
 }
 
 export const ProviseurModule: React.FC<ProviseurModuleProps> = ({ 
-  onClose, classes, students, teachers, events, inventory, allStaff, mediaFiles, userName, currentUser, onOpenSurveillance
+  onClose, classes, students, teachers, events, inventory, allStaff, mediaFiles, userName,onOpenInventory, currentUser, onOpenSurveillance
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'budget' | 'performance' | 'certificates'>('overview');
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -36,6 +40,7 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
   const [loading, setLoading] = useState(true);
   const [showSignModal, setShowSignModal] = useState<string | null>(null);
   const [isCertificatesOpen, setIsCertificatesOpen] = useState(false);
+  const [selectedSender, setSelectedSender] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubPayments = db.collection('payments')
@@ -88,8 +93,102 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
     { label: 'Ressources (Immo)', val: inventory.length.toString(), icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Occupation Salles', val: 'Surveillance', icon: Activity, color: 'text-rose-600', bg: 'bg-rose-50', action: onOpenSurveillance },
     { label: 'Budget Recouvré', val: financialStats.total.toLocaleString() + ' F', icon: Landmark, color: 'text-amber-600', bg: 'bg-amber-50' },
+    {
+  label: 'Inventaire Central',
+  val: 'Ouvrir',
+  icon: Package,
+  color: 'text-cyan-600',
+  bg: 'bg-cyan-50',
+  action: onOpenInventory
+},
+{
+  label: 'Certifications',
+  val: 'Ouvrir',
+  icon: FileCheck,
+  color: 'text-violet-600',
+  bg: 'bg-violet-50',
+  action: () => setActiveTab('certificates')
+},
   ];
 
+ const handleExportFinance = () => {
+  const rows = payments.map((p) => ({
+    Élève: p.studentName,
+    Référence: p.reference,
+    Type: p.type,
+    Montant: p.amount,
+    Statut: p.status,
+    Date: new Date(p.date).toLocaleDateString(),
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    'Finances'
+  );
+
+  const excelBuffer = XLSX.write(workbook, {
+    bookType: 'xlsx',
+    type: 'array',
+  });
+
+  const data = new Blob(
+    [excelBuffer],
+    {
+      type:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
+    }
+  );
+
+  saveAs(
+    data,
+    `Finances_${new Date().toISOString()}.xlsx`
+  );
+};
+
+
+
+const downloadReport = (report: any) => {
+  const doc = new jsPDF();
+
+  doc.setFontSize(18);
+  doc.text(report.title, 20, 20);
+
+  doc.setFontSize(12);
+  doc.text(report.content || "Aucun contenu", 20, 40, {
+    maxWidth: 170
+  });
+
+  doc.save(`${report.title}.pdf`);
+};
+
+
+
+
+const handleOpenSenderReports = (sender: string) => {
+  setSelectedSender(sender);
+  setActiveTab('reports');
+};;
+
+const handleOpenEvent = (event: SchoolEvent) => {
+  alert(`Événement : ${event.title}`);
+};
+if (loading) {
+  return (
+    <div className="fixed inset-0 bg-slate-950 flex items-center justify-center text-white">
+      <div className="space-y-4 text-center">
+        <Activity className="animate-pulse mx-auto text-indigo-500" size={40} />
+        <p className="text-xs font-black uppercase tracking-widest">
+          Chargement du Cabinet du Proviseur...
+        </p>
+      </div>
+    </div>
+  );
+}
   return (
     <div className="fixed inset-0 z-[700] bg-slate-50 dark:bg-slate-950 flex flex-col font-sans overflow-hidden">
       {/* HEADER */}
@@ -115,7 +214,9 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
                 <Activity size={16} className="text-emerald-500 animate-pulse" />
                 <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest">Système Opérationnel</span>
              </div>
-             <button className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-black/10">
+             <button 
+             onClick={() => setActiveTab('reports')}
+             className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-black/10">
                <Stamp size={14} /> Signature Numérique
              </button>
           </div>
@@ -264,7 +365,9 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
                     </h4>
                     <div className="space-y-6">
                        {events.filter(e => e.type === 'PROVISEUR' || e.isUrgent).slice(0, 3).map((e, i) => (
-                         <div key={i} className="flex gap-4 group cursor-pointer">
+                         <div key={i} 
+                          onClick={() => handleOpenEvent(e)}
+                         className="flex gap-4 group cursor-pointer">
                            <div className="h-10 w-10 shrink-0 bg-slate-100 dark:bg-white/10 rounded-xl flex flex-col items-center justify-center border border-black/5 group-hover:border-indigo-500/50 transition-all">
                              <span className="text-[10px] font-black text-indigo-600">{new Date(e.date).getDate()}</span>
                              <span className="text-[8px] font-bold text-slate-400 uppercase">{new Date(e.date).toLocaleString('default', { month: 'short' })}</span>
@@ -347,7 +450,9 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
                        <Activity className="text-indigo-600" /> Historique Financier
                     </h3>
                     <div className="flex gap-2">
-                       <button className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[8px] font-black uppercase tracking-widest flex items-center gap-2">
+                       <button 
+                       onClick={handleExportFinance}
+                       className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[8px] font-black uppercase tracking-widest flex items-center gap-2">
                           <ExternalLink size={14} /> Export XLS
                        </button>
                     </div>
@@ -472,7 +577,10 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
             >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {['Directeur des Études', 'Chef des Travaux', 'Surveillant Général', 'Intendant'].map((sender, i) => (
-                  <button key={i} className="glass p-8 rounded-[2.5rem] bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 text-left hover:border-indigo-500/30 transition-all group shadow-sm hover:shadow-xl">
+                  <button
+                   key={i} 
+                   onClick={() => handleOpenSenderReports(sender)}
+                   className="glass p-8 rounded-[2.5rem] bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 text-left hover:border-indigo-500/30 transition-all group shadow-sm hover:shadow-xl">
                      <div className="h-12 w-12 bg-slate-100 dark:bg-white/5 rounded-2xl flex items-center justify-center mb-6 text-slate-500 group-hover:text-indigo-600 transition-colors shadow-inner">
                        <Briefcase size={24} />
                      </div>
@@ -483,7 +591,28 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
                   </button>
                 ))}
               </div>
+              <div className="flex items-center justify-between">
+  <div>
+    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase">
+      Archives Directionnelles
+    </h3>
 
+    {selectedSender && (
+      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">
+        Filtre actif : {selectedSender}
+      </p>
+    )}
+  </div>
+
+  {selectedSender && (
+    <button
+      onClick={() => setSelectedSender(null)}
+      className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+    >
+      Réinitialiser
+    </button>
+  )}
+</div>
               <div className="bg-white dark:bg-white/5 rounded-[3rem] border border-black/5 dark:border-white/10 overflow-hidden shadow-2xl">
                  <table className="w-full">
                     <thead>
@@ -520,7 +649,9 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
                                </span>
                             </td>
                             <td className="px-10 py-6 text-right">
-                               <button className="h-10 w-10 bg-slate-100 dark:bg-white/10 text-slate-500 rounded-xl inline-flex items-center justify-center hover:scale-110 transition-transform border border-black/5">
+                               <button
+                               onClick={() => downloadReport(r)}
+                                className="h-10 w-10 bg-slate-100 dark:bg-white/10 text-slate-500 rounded-xl inline-flex items-center justify-center hover:scale-110 transition-transform border border-black/5">
                                  <Download size={18} />
                                </button>
                             </td>
@@ -557,6 +688,40 @@ export const ProviseurModule: React.FC<ProviseurModuleProps> = ({
           ) : null}
         </AnimatePresence>
       </div>
+      <div className="glass p-8 rounded-[3rem] bg-white dark:bg-white/5 border border-black/5 dark:border-white/5 shadow-sm space-y-6">
+  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+    Infrastructure <Package size={14} className="text-cyan-500" />
+  </h4>
+
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-black uppercase text-slate-600">
+        Ressources
+      </span>
+
+      <span className="text-xs font-black text-slate-900 dark:text-white">
+        {inventory.length}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-black uppercase text-slate-600">
+        Salles Actives
+      </span>
+
+      <span className="text-xs font-black text-emerald-500">
+        {classes.length}
+      </span>
+    </div>
+
+    <button
+      onClick={onOpenInventory}
+      className="w-full py-3 rounded-2xl bg-cyan-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-cyan-700 transition-all"
+    >
+      Ouvrir Inventaire
+    </button>
+  </div>
+</div>
 
       {/* SIGNATURE MODAL Overlay (Global) */}
       <AnimatePresence>
